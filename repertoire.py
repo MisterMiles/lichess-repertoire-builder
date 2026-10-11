@@ -501,6 +501,7 @@ def neues_spiel(cfg, titel, fen=None):
                  ("Result", "*"), ("ECO", cfg["eco"]), ("Annotator", "repertoire.py (Lichess, Stockfish)"),
                  ("PlyCount", "0"), ("SourceTitle", cfg["titel"]), ("SourceVersionDate", heute)):
         g.headers[k] = v
+    g.headers["ChapterName"] = titel   # Lichess Studien nutzen diesen Namen statt "Weiß - Schwarz"
     if fen: g.setup(chess.Board(fen))
     return g
 
