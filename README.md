@@ -8,12 +8,45 @@ Builds an annotated opening repertoire as PGN, for White or Black: the opponent'
 
 The scripts, their console output and the generated PGN comments are in German. The configuration keys are German too, every key is explained below.
 
-## Requirements (macOS)
+## Requirements
+
+Always needed:
+- **Python 3** with the package `chess` (python-chess). Tested with 3.13, 3.9 or newer should work.
+- **Stockfish**. Set its name or full path in the configuration under `"stockfish"`.
+- **For the filter script:** `bash`, `awk` (`mawk` is much faster, the script picks the fastest one available), `zstd`, `curl` for `-m`, optionally `pv` for a progress display.
+- **Disk:** a monthly file is about 29 GB. With `-m` the file is streamed and not stored.
+- **Memory:** all filtered games are loaded at once. Not measured yet, very large data sets may need a lot of RAM.
+
+### macOS
 
 ```bash
 brew install zstd pv mawk stockfish
 python3 -m pip install chess
 ```
+
+### Linux (Debian, Ubuntu)
+
+```bash
+sudo apt install zstd pv mawk stockfish python3-venv
+python3 -m venv ~/.venv-repertoire
+~/.venv-repertoire/bin/pip install chess
+```
+
+Recent distributions block `pip install` into the system Python, hence the virtual environment. Run the script with `~/.venv-repertoire/bin/python repertoire.py ...`. The distribution's Stockfish package is often older, current builds are available at https://stockfishchess.org/download/.
+
+### Windows
+
+- **Recommended: WSL2** (Ubuntu on Windows), then follow the Linux steps. The filter script is a bash script and does not run natively on Windows.
+- **Python part only, natively:** install Python from python.org, run `py -m pip install chess`, download Stockfish from https://stockfishchess.org/download/ and set its path in the configuration, e.g. `"stockfish": "C:/Tools/stockfish/stockfish.exe"`. The table from the filter script then has to come from WSL or another machine.
+
+### What has been tested
+
+| | Filter script | repertoire.py |
+|---|---|---|
+| Linux | tested | tested (Python 3.13) |
+| macOS | tested (earlier version of the filter) | not tested yet |
+| Windows (WSL2) | not tested | not tested |
+| Windows (native) | not supported | not tested |
 
 Sources:
 - Lichess open database: https://database.lichess.org

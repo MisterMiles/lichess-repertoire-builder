@@ -6,12 +6,45 @@
 
 Baut für Weiß oder Schwarz ein kommentiertes Repertoire als PGN: die häufigsten Antworten des Gegners, wie diese Partien ausgehen, wie Stockfish die Stellungen bewertet, wo der Gegner am häufigsten Fehler macht und welche Bauernstrukturen typisch sind. Dazu kommt eine kleine Quickstart PGN mit den wahrscheinlichsten Linien zum Üben.
 
-## Voraussetzungen (macOS)
+## Voraussetzungen
+
+Immer nötig:
+- **Python 3** mit dem Paket `chess` (python-chess). Getestet mit 3.13, ab 3.9 sollte es laufen.
+- **Stockfish**. Name oder voller Pfad steht in der Konfiguration unter `"stockfish"`.
+- **Für das Filterskript:** `bash`, `awk` (`mawk` ist deutlich schneller, das Skript nimmt automatisch das schnellste vorhandene), `zstd`, `curl` für `-m`, optional `pv` für die Fortschrittsanzeige.
+- **Speicherplatz:** Eine Monatsdatei hat etwa 29 GB. Mit `-m` wird gestreamt und nichts gespeichert.
+- **Arbeitsspeicher:** Alle gefilterten Partien werden auf einmal geladen. Noch nicht gemessen, sehr große Datensätze können viel RAM brauchen.
+
+### macOS
 
 ```bash
 brew install zstd pv mawk stockfish
 python3 -m pip install chess
 ```
+
+### Linux (Debian, Ubuntu)
+
+```bash
+sudo apt install zstd pv mawk stockfish python3-venv
+python3 -m venv ~/.venv-repertoire
+~/.venv-repertoire/bin/pip install chess
+```
+
+Neuere Distributionen lassen `pip install` direkt ins System nicht zu, deshalb die virtuelle Umgebung. Gestartet wird dann mit `~/.venv-repertoire/bin/python repertoire.py ...`. Das Stockfish Paket der Distribution ist oft älter, aktuelle Versionen gibt es unter https://stockfishchess.org/download/.
+
+### Windows
+
+- **Empfohlen: WSL2** (Ubuntu unter Windows), dann wie bei Linux. Das Filterskript ist ein Bash Skript und läuft nicht nativ unter Windows.
+- **Nur der Python Teil, nativ:** Python von python.org, `py -m pip install chess`, Stockfish von https://stockfishchess.org/download/ laden und den Pfad in der Konfiguration eintragen, z. B. `"stockfish": "C:/Tools/stockfish/stockfish.exe"`. Die Tabelle aus dem Filterskript muss dann aus WSL oder von einem anderen Rechner kommen.
+
+### Was getestet ist
+
+| | Filterskript | repertoire.py |
+|---|---|---|
+| Linux | getestet | getestet (Python 3.13) |
+| macOS | getestet (frühere Version des Filters) | noch nicht getestet |
+| Windows (WSL2) | nicht getestet | nicht getestet |
+| Windows (nativ) | nicht unterstützt | nicht getestet |
 
 Quellen:
 - Lichess Open Database: https://database.lichess.org
