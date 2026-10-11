@@ -1,174 +1,63 @@
 ![lichess repertoire builder](docs/banner.svg)
 
-# Opening repertoires from Lichess data
+# lichess repertoire builder
 
 **English** | [Deutsch](README.de.md)
 
-Builds an annotated opening repertoire as PGN, for White or Black: the opponent's most frequent replies, how those games end, how Stockfish evaluates the positions, where the opponent most often goes wrong and which pawn structures are typical. A small quickstart PGN with the most likely lines is created as well, for fast practice.
+Tell it which opening you play. The tool grabs real Lichess games from your rating range and turns them into a repertoire PGN: what your opponents actually play, how those games end, where they go wrong most often and how Stockfish sees the positions. Open the PGN in a Lichess study or in ChessBase.
 
-The scripts, their console output and the generated PGN comments are in German. The configuration keys are German too, every key is explained below.
+## Quick start (Mac)
 
-## Requirements
-
-Always needed:
-- **Python 3** with the package `chess` (python-chess). Tested with 3.13, 3.9 or newer should work.
-- **Stockfish**. Set its name or full path in the configuration under `"stockfish"`.
-- **For the filter script:** `bash`, `awk` (`mawk` is much faster, the script picks the fastest one available), `zstd`, `curl` for `-m`, optionally `pv` for a progress display.
-- **Disk:** a monthly file is about 29 GB. With `-m` the file is streamed and not stored.
-- **Memory:** all filtered games are loaded at once. Not measured yet, very large data sets may need a lot of RAM.
-
-### macOS
+**1. Install the programs** (once, in the Terminal app). If Homebrew is missing, run the line from [brew.sh](https://brew.sh) first.
 
 ```bash
-brew install zstd pv mawk stockfish
-python3 -m venv ~/.venv-repertoire
-~/.venv-repertoire/bin/pip install chess
+brew install python zstd pv mawk stockfish
 ```
 
-Homebrew's Python blocks `pip install` into the system as well, hence the virtual environment. Run the script with `~/.venv-repertoire/bin/python repertoire.py ...`.
-
-### Linux (Debian, Ubuntu)
+**2. Download the tool**
 
 ```bash
-sudo apt install zstd pv mawk stockfish python3-venv
-python3 -m venv ~/.venv-repertoire
-~/.venv-repertoire/bin/pip install chess
+git clone https://github.com/MisterMiles/lichess-repertoire-builder.git
+cd lichess-repertoire-builder
 ```
 
-Recent distributions block `pip install` into the system Python, hence the virtual environment. Run the script with `~/.venv-repertoire/bin/python repertoire.py ...`. The distribution's Stockfish package is often older, current builds are available at https://stockfishchess.org/download/.
+Without git: click "Code" and then "Download ZIP" on GitHub, unzip it and `cd` into the folder in the Terminal.
 
-### Windows
-
-- **Recommended: WSL2** (Ubuntu on Windows), then follow the Linux steps. The filter script is a bash script and does not run natively on Windows.
-- **Python part only, natively:** install Python from python.org, run `py -m pip install chess`, download Stockfish from https://stockfishchess.org/download/ and set its path in the configuration, e.g. `"stockfish": "C:/Tools/stockfish/stockfish.exe"`. The table from the filter script then has to come from WSL or another machine.
-
-### What has been tested
-
-| | Filter script | repertoire.py |
-|---|---|---|
-| Linux | tested | tested (Python 3.13) |
-| macOS | tested (earlier version of the filter) | not tested yet |
-| Windows (WSL2) | not tested | not tested |
-| Windows (native) | not supported | not tested |
-
-Sources:
-- Lichess open database: https://database.lichess.org
-- Lichess Elite Database (2500+ vs 2300+): https://database.nikonoel.fr
-- Stockfish: https://github.com/official-stockfish/Stockfish
-- python-chess: https://github.com/niklasf/python-chess
-- zstd: https://github.com/facebook/zstd, pv: https://www.ivarch.com/programs/pv.shtml, mawk: https://invisible-island.net/mawk/
-
-## 1. Filter games
-
-Download a monthly file (about 29 GB) or stream it directly, then filter by your starting moves. Moves use English notation.
+**3. Build your repertoire**
 
 ```bash
-# local file
-bash lichess_filter.sh -s "1. e4" -i lichess_db_standard_rated_2026-09.pgn.zst -o games.pgn --tsv games.tsv
-
-# stream straight from Lichess, nothing large is stored
-bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o games.pgn --tsv games.tsv
+bash repertoire.sh weiss "1. e4"
 ```
 
-| Option | Meaning | Default |
-|---|---|---|
-| `-s` | starting moves, e.g. `"1. e4 c5 2. Nf3"` | required unless `--enthaelt` is used |
-| `-i` / `-m` | file (`.pgn.zst` or `.pgn`) or month `YYYY-MM` | one of them |
-| `-o` | output PGN | required |
-| `--tsv` | also write the table for `repertoire.py` | off |
-| `--elo-min` / `--elo-max` | both players within this range | 1800 / 2499 |
-| `--elo-einer` | at least one player at or above this rating | off |
-| `--mit-bullet`, `--mit-bots` | keep bullet or bot games | excluded |
-| `--halbzuege` | half moves stored in the table | 30 |
-| `--enthaelt` | a move that appears anywhere in the first moves (for transpositions) | off |
-| `--zug-farbe` | who plays that move, `weiss` (White) or `schwarz` (Black) | weiss |
-| `--bis-zug` | at the latest in this move | 5 |
-| `--nicht-start` | exclude games that start with these moves | off |
+That's it. On the first run the script sets up everything it needs.
 
-For Black, include White's first move and your own reply in the starting moves, e.g. `"1. d4 d5"`. Otherwise the script takes the most played reply as the main line, which may not be yours.
-
-One month takes about 5 to 15 minutes depending on the machine and the starting moves. For several months, run the command per month and join the tables with `cat`.
-
-## 2. Create a configuration
-
-One JSON file per repertoire, templates: `beispiel_weiss.json` (White), `beispiel_schwarz.json` (Black). Only set the keys that differ from the default.
-
-| Key | Meaning | Default |
-|---|---|---|
-| `titel`, `farbe`, `start`, `daten`, `ausgabe` | name, `"weiss"` or `"schwarz"`, starting moves, table from step 1, output PGN | required |
-| `system` | what makes a game count as your own system, e.g. `[{"zug": "Nf3", "spaetestens_zug": 3, "nicht_vorher": []}]` (move, at the latest in move, not after these moves) | all games |
-| `ohne_systemfilter` | first opponent replies counted without the system rule (e.g. a gambit) | none |
-| `erste_antworten` | number of first opponent replies | 10 |
-| `antworten` | opponent replies per move | 3 |
-| `fruehe_zuege_ab_5_prozent` | move numbers where every reply of 5 % or more is added | 2 and 3 |
-| `min_partien` | a line branches only with at least this many games | 20 |
-| `bis_zug` | maximum depth (move number) | 15 |
-| `hv_tiefe` | opponent move at which the main line is split into chapters | 4 |
-| `kapitel_max` | larger chapters are split | 800 moves |
-| `repertoire_pgn` | existing repertoire, your moves in it are marked as repertoire moves, comments are kept | none |
-| `repertoire_zuege` | `"alle"`: every own move in that file is a repertoire move, `"hauptzug"`: only the first one per position | alle |
-| `kommentare_entfernen` | regular expressions for sentences to drop from those comments | none |
-| `anhang_pgn` | PGN files whose games are appended as theme chapters | none |
-| `statistik` | write share and number of games at every move | off |
-| `quickstart_linien`, `quickstart_bis_zug` | number and length of the quickstart lines | 15, move 14 |
-| `fehler` | look for frequent opponent mistakes per chapter | on |
-| `fehler_grenze` | loss on the winning chances scale from which a move counts as a mistake (0.2 is the Lichess threshold for "mistake", about one pawn in a balanced position) | 0.2 |
-| `fehler_min_partien`, `fehler_min_anteil`, `fehler_anzahl` | a move is checked only with at least this many games and this share, the most frequent ones are shown | 10, 5 %, 5 |
-| `strukturen_zug`, `strukturen_anzahl` | move and number of pawn structures | move 12, 5 |
-| `strukturen_text` | JSON file with your own explanation per structure (`{"id": "text"}`, the ids are listed in `<output>_strukturen.json`) | none |
-| `stockfish`, `tiefe`, `fehler_tiefe`, `prozesse` | engine path, search depth at line ends and for the mistake search, parallel processes | stockfish, 18, 14, 2 |
-| `eco` | ECO code for the headers | ? |
-
-## 3. Build the repertoire
+## Examples
 
 ```bash
-python3 repertoire.py my_configuration.json
+# White with 1.e4, against everything Black plays
+bash repertoire.sh weiss "1. e4"
+
+# Black against 1.d4 with 1...d5, opponents rated 1600 to 2000, quick trial run first
+bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
 ```
 
-Outputs:
-- `<output>.pgn`: the repertoire
-- `<output>_quickstart.pgn`: the most likely lines up to move 14, one chapter per line. Where the data ends, the line continues with Stockfish's best move, marked with a comment.
-- `<output>_strukturen.json`: the pawn structures with all numbers, a base for your own explanations
-- `<output>_stockfish.json`: engine cache
+`weiss` means White, `schwarz` means Black (`white` and `black` work too). Moves use English notation. For Black, include your own reply in the starting moves.
 
-### Runtime and progress
+## What you get
 
-The script runs in six steps and shows a progress bar with percentage, count and estimated time left for the long steps:
+A folder named after your repertoire, containing:
+- **`….pgn`**: your repertoire, split into chapters for the main line and the deviations. The chapter name shows how often you will meet the line in practice. Every line ends with a Stockfish evaluation and a model game, every chapter ends with your opponents' most frequent mistakes and how to punish them. Typical pawn structures are included too.
+- **`…_quickstart.pgn`**: the 15 most likely lines up to move 14, perfect for practice.
 
-```
-1/6 Daten
-  Partien laden [██████████░░░░░░░░░░]  52,0 %  97456/187412  noch ca. 4 Min.
-3/6 Stockfish
-  Stockfish     [████░░░░░░░░░░░░░░░░]  21,3 %  560/2613  noch ca. 38 Min.
-```
+The PGN comments are in German.
 
-Rough values for about 190,000 games with 2 processes: loading 10 minutes, Stockfish 30 to 90 minutes (the biggest part, depends on `tiefe`, `fehler_tiefe` and the number of lines), model games 5 minutes, writing under a minute. More `prozesse` speed up Stockfish almost linearly, the number of CPU cores minus one is a good choice. Stopping is safe: Stockfish results are saved continuously and a new run only computes what is missing.
+## Good to know
 
-## Structure of the repertoire PGN
-
-- 01 Intro with rules and symbols, plus the main line.
-- Part 1: main line, one chapter per opponent reply at the split point.
-- Further parts: opponent deviations from late to early, large chapters split by the next move.
-- The chapter name shows the share of all evaluated games that reach the chapter, e.g. `(4,2 % gesamt)`.
-- The main line is the most played move, your repertoire move is marked next to it.
-- Line ends: Stockfish evaluation symbol, green arrow for the best move, model game with the highest average rating.
-- End of each chapter: the opponent's most frequent mistakes. A move counts as a mistake if it loses at least `fehler_grenze` winning chances according to Stockfish. Each mistake shows the evaluation before and after and your score after this move compared with the other moves in the same position. In the tree the move is marked ? or ??, together with the refutation.
-- Pawn structures: the most frequent central structures (files c to f) after move 12 with an example position, share, score, castling sides, typical squares of your minor pieces and the most frequent pawn breaks.
-- Appendix with theme chapters, a summary up to move 5 at the end.
-- Transpositions refer to the chapter where the position first appears.
-
-## Measure transpositions from other move orders
-
-The repertoire only counts games that start with the starting moves. `zugumstellungen.py` measures how many games reach the same positions through other move orders:
-
-```bash
-# games in which your key move comes later
-bash lichess_filter.sh --enthaelt d4 --bis-zug 4 --nicht-start "1. d4" -i month.pgn.zst -o other.pgn --tsv other.tsv
-python3 zugumstellungen.py my_configuration.json other.tsv
-```
-
-The result shows how many additional games reach a position of the repertoire and through which move orders.
+- **Time:** the games of one Lichess month are streamed from the internet (about 29 GB, nothing of it is stored). Depending on your connection this takes 30 minutes to a few hours. Stockfish then needs 15 to 60 minutes. With `--schnell` you see a result within minutes once the games are in.
+- **Running again:** with the same arguments the script reuses the downloaded games and only computes what is missing.
+- **Linux:** instead of Homebrew use `sudo apt install python3-venv zstd pv mawk stockfish`, the rest is the same.
+- **More settings:** rating range, month, your own repertoire and every fine tuning option are in the [full guide](docs/GUIDE.md).
 
 ## License
 
-GPL 3.0, in line with python-chess and Stockfish. See `LICENSE`.
+GPL 3.0, see [LICENSE](LICENSE). Data: [Lichess open database](https://database.lichess.org), engine: [Stockfish](https://stockfishchess.org).

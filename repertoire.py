@@ -37,6 +37,9 @@ def lade_config(pfad):
     cfg["ich"] = chess.WHITE if cfg["farbe"].lower().startswith("w") else chess.BLACK
     cfg["start_san"] = [t for t in re.sub(r"\d+\.(\.\.)?", " ", cfg["start"]).split() if t]
     cfg["basis"] = os.path.splitext(cfg["ausgabe"])[0]
+    if os.environ.get("REPERTOIRE_SCHNELL"):
+        cfg["tiefe"] = min(cfg["tiefe"], 10); cfg["fehler_tiefe"] = min(cfg["fehler_tiefe"], 8)
+        print("Schneller Probelauf: Stockfish Tiefe 10, Fehlersuche Tiefe 8", flush=True)
     return cfg
 
 def epd(b): return b.epd()
@@ -358,7 +361,7 @@ def fehler_auswerten(cfg, kapitel, kandidaten, sf, daten):
         funde = []
         for d, tot, kand in st:
             b = chess.Board(d["fa"]); ucis = sorted(b.parse_san(m).uci() for m, _ in kand)
-            r = sf.get(f"F|{key(d['fa'])}|{','.join(ucis)}")
+            r = sf.get(f"F{cfg['fehler_tiefe']}|{key(d['fa'])}|{','.join(ucis)}")
             if not r: continue
             vz = 1 if gegner == chess.WHITE else -1
             pz = daten["punkte"].get((d["ply"], key(d["fa"])), {})
@@ -522,7 +525,7 @@ class Schreiber:
         return f"Zugumstellung, siehe Kapitel {best[1]:02d} nach {txt}." if best else f"Zugumstellung zur Stellung nach {txt}."
 
     def ende(self, node, fen, mit_partie=True):
-        teile = []; r = self.sf.get("E|" + key(fen))
+        teile = []; r = self.sf.get(f"E{self.cfg['tiefe']}|" + key(fen))
         if r and r["s"] is not None:
             node.nags.add(winkel(r["s"]))
             if r["m"]: teile.append(pfeil(r["m"]))
@@ -610,16 +613,16 @@ def main():
     bb = chess.Board()
     for m in intro: bb.push_san(m)
     fens.add(bb.fen())
-    aufgaben = [("E", "E|" + key(f), f, cfg["tiefe"]) for f in fens]
+    aufgaben = [("E", f"E{cfg['tiefe']}|" + key(f), f, cfg["tiefe"]) for f in fens]
     for st in kandidaten:
         for d, tot, kand in st:
             bx = chess.Board(d["fa"]); ucis = sorted(bx.parse_san(m).uci() for m, _ in kand)
-            aufgaben.append(("F", f"F|{key(d['fa'])}|{','.join(ucis)}", d["fa"], ucis, cfg["fehler_tiefe"]))
+            aufgaben.append(("F", f"F{cfg['fehler_tiefe']}|{key(d['fa'])}|{','.join(ucis)}", d["fa"], ucis, cfg["fehler_tiefe"]))
     q_ende = cfg["quickstart_bis_zug"] * 2
     for p, pfad in linien:
         bx = chess.Board()
         for m in pfad: bx.push_san(m)
-        aufgaben.append(("L", f"L|{key(bx.fen())}|{q_ende - len(pfad)}", bx.fen(), max(q_ende - len(pfad), 0), cfg["tiefe"]))
+        aufgaben.append(("L", f"L{cfg['tiefe']}|{key(bx.fen())}|{q_ende - len(pfad)}", bx.fen(), max(q_ende - len(pfad), 0), cfg["tiefe"]))
     sf = stockfish(cfg, aufgaben)
 
     print("4/6 Fehler des Gegners und Musterpartien", flush=True)
@@ -701,7 +704,7 @@ def main():
     for i, (p, pfad) in enumerate(linien, 1):
         g = neues_spiel(cfg, f"{i:02d} {zugfolge(pfad[:8], cfg)}")
         n, bx = zuege_setzen(g, pfad)
-        r = sf.get(f"L|{key(bx.fen())}|{q_ende - len(pfad)}")
+        r = sf.get(f"L{cfg['tiefe']}|{key(bx.fen())}|{q_ende - len(pfad)}")
         if r:
             for j, u in enumerate(r["zuege"]):
                 n = n.add_variation(chess.Move.from_uci(u))
