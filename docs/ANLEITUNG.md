@@ -40,7 +40,7 @@ Neuere Distributionen lassen `pip install` direkt ins System nicht zu, deshalb d
 | | Filterskript | repertoire.py |
 |---|---|---|
 | Linux | getestet | getestet (Python 3.13) |
-| macOS | getestet (frühere Version des Filters) | noch nicht getestet |
+| macOS | getestet | getestet |
 
 Quellen:
 - Lichess Open Database: https://database.lichess.org

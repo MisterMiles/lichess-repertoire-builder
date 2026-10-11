@@ -42,7 +42,7 @@ Recent distributions block `pip install` into the system Python, hence the virtu
 | | Filter script | repertoire.py |
 |---|---|---|
 | Linux | tested | tested (Python 3.13) |
-| macOS | tested (earlier version of the filter) | not tested yet |
+| macOS | tested | tested |
 
 Sources:
 - Lichess open database: https://database.lichess.org
