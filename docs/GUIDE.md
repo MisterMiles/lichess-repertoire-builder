@@ -14,7 +14,7 @@ Always needed:
 - **Python 3** with the package `chess` (python-chess). Tested with 3.13, 3.9 or newer should work.
 - **Stockfish**. Set its name or full path in the configuration under `"stockfish"`.
 - **For the filter script:** `bash`, `awk` (`mawk` is much faster, the script picks the fastest one available), `zstd`, `curl` for `-m`, optionally `pv` for a progress display.
-- **Disk:** a monthly file is about 29 GB. With `-m` the file is streamed and not stored. `repertoire.sh` streams as well, unless you use `--archiv`.
+- **Disk:** a monthly file is about 29 GB. With `-m` the file is streamed and not stored. `repertoire.sh` streams as well, unless you use `--archive`.
 - **Memory:** all filtered games are loaded at once. Not measured yet, very large data sets may need a lot of RAM.
 
 ### macOS
@@ -56,21 +56,21 @@ Sources:
 `repertoire.sh` runs all steps below in one go: it sets up a Python environment, streams and filters the games, writes `konfiguration.json` and builds the repertoire. Everything lands in one folder.
 
 ```bash
-bash repertoire.sh weiss "1. e4"
-bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
+bash repertoire.sh white "1. e4"
+bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 ```
 
 | Option | Meaning | Default |
 |---|---|---|
 | `--elo FROM-TO` | rating range of both players | 1800-2499 |
-| `--monat YYYY-MM` | Lichess month, several as `YYYY-MM..YYYY-MM` | last full month |
-| `--monate N` | the last N full months | off |
-| `--bank FOLDER` | game bank: every month is turned once into a table of all games (no bullet, no bots, about 5 GB per month). Further analyses only search in it, a few seconds per month. With `--archiv` the bank is built from the stored monthly files, otherwise streamed | off |
-| `--archiv FOLDER` | keep the monthly files there instead of only streaming (about 29 GB each), existing ones are reused | off |
-| `--datei FILE` | your own Lichess file (`.pgn` or `.pgn.zst`) instead of the download | off |
+| `--month YYYY-MM` (`--monat`) | Lichess month, several as `YYYY-MM..YYYY-MM` | last full month |
+| `--months N` (`--monate`) | the last N full months | off |
+| `--bank FOLDER` | game bank: every month is turned once into a table of all games (no bullet, no bots, about 5 GB per month). Further analyses only search in it, a few seconds per month. With `--archive` the bank is built from the stored monthly files, otherwise streamed | off |
+| `--archive FOLDER` (`--archiv`) | keep the monthly files there instead of only streaming (about 29 GB each), existing ones are reused | off |
+| `--file FILE` (`--datei`) | your own Lichess file (`.pgn` or `.pgn.zst`) instead of the download | off |
 | `--name NAME` | folder name for the results | from colour and moves |
 | `--repertoire PGN` | your own repertoire, its moves get marked | none |
-| `--schnell` | quick trial run with low Stockfish depth | off |
+| `--quick` (`--schnell`) | quick trial run with low Stockfish depth | off |
 | `--notation de` | German piece letters (S, L, T, D) in chapter names and comments | English (N, B, R, Q) |
 
 Running it again with the same arguments reuses the games and the Stockfish results. For fine tuning, edit `konfiguration.json` in the folder (keys below) and run again.
@@ -79,18 +79,18 @@ The sections below describe the single steps for full control.
 
 ## Game bank for many analyses
 
-`partienbank.sh` turns Lichess months once into compact tables of all games, without bullet and bots, with every opening and rating range and the first 40 half moves. `repertoire.sh --bank FOLDER` calls it automatically and afterwards only searches the bank.
+`gamebank.sh` turns Lichess months once into compact tables of all games, without bullet and bots, with every opening and rating range and the first 40 half moves. `repertoire.sh --bank FOLDER` calls it automatically and afterwards only searches the bank.
 
 ```bash
-bash partienbank.sh ~/partienbank 2026-07 2026-08 2026-09
-bash partienbank.sh ~/partienbank 2026-09 --archiv ~/lichess    # from stored monthly files
+bash gamebank.sh ~/gamebank 2026-07 2026-08 2026-09
+bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess    # from stored monthly files
 ```
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--archiv FOLDER` | read monthly files from there, download missing ones into it | stream |
-| `--mit-bullet` | include bullet games | without |
-| `--teile N` | parallel processes | CPU cores minus one, at most 8 |
+| `--archive FOLDER` (`--archiv`) | read monthly files from there, download missing ones into it | stream |
+| `--with-bullet` (`--mit-bullet`) | include bullet games | without |
+| `--jobs N` (`--teile`) | parallel processes | CPU cores minus one, at most 8 |
 
 Measured on a 2 GB slice of September 2026: 63 % of the games remain (no bullet, no bots), the bank is about 2.4 % of the unpacked PGN. Extrapolated that is roughly 5 GB per month instead of 29 GB, and searching for starting moves then takes under a minute per month instead of about 8 minutes.
 
@@ -108,22 +108,22 @@ bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o games.pgn --tsv games.t
 
 | Option | Meaning | Default |
 |---|---|---|
-| `-s` | starting moves, e.g. `"1. e4 c5 2. Nf3"` | required unless `--enthaelt` is used |
+| `-s` | starting moves, e.g. `"1. e4 c5 2. Nf3"` | required unless `--contains` is used |
 | `-i` / `-m` | file (`.pgn.zst` or `.pgn`) or month `YYYY-MM` | one of them |
 | `-o` | output PGN | required |
 | `--tsv` | also write the table for `repertoire.py` | off |
 | `--elo-min` / `--elo-max` | both players within this range | 1800 / 2499 |
-| `--elo-einer` | at least one player at or above this rating | off |
-| `--mit-bullet`, `--mit-bots` | keep bullet or bot games | excluded |
-| `--halbzuege` | half moves stored in the table | 40 |
-| `--enthaelt` | a move that appears anywhere in the first moves (for transpositions) | off |
-| `--zug-farbe` | who plays that move, `weiss` (White) or `schwarz` (Black) | weiss |
-| `--bis-zug` | at the latest in this move | 5 |
-| `--nicht-start` | exclude games that start with these moves | off |
+| `--elo-one` (`--elo-einer`) | at least one player at or above this rating | off |
+| `--with-bullet`, `--with-bots` (`--mit-bullet`, `--mit-bots`) | keep bullet or bot games | excluded |
+| `--plies` (`--halbzuege`) | half moves stored in the table | 40 |
+| `--contains` (`--enthaelt`) | a move that appears anywhere in the first moves (for transpositions) | off |
+| `--move-color` (`--zug-farbe`) | who plays that move, `white` or `black` | white |
+| `--by-move` (`--bis-zug`) | at the latest in this move | 5 |
+| `--not-start` (`--nicht-start`) | exclude games that start with these moves | off |
 
 For Black, include White's first move and your own reply in the starting moves, e.g. `"1. d4 d5"`. Otherwise the script takes the most played reply as the main line, which may not be yours.
 
-One month takes about 5 to 15 minutes depending on the machine and the starting moves. For several months, run the command per month and join the tables with `cat`. `repertoire.sh` does this automatically with `--monate` or `--monat FROM..TO` and remembers every finished month in the subfolder `monate`.
+One month takes about 5 to 15 minutes depending on the machine and the starting moves. For several months, run the command per month and join the tables with `cat`. `repertoire.sh` does this automatically with `--months` or `--month FROM..TO` and remembers every finished month in the subfolder `monate`.
 
 ## 2. Create a configuration
 
@@ -203,7 +203,7 @@ The repertoire only counts games that start with the starting moves. `zugumstell
 
 ```bash
 # games in which your key move comes later
-bash lichess_filter.sh --enthaelt d4 --bis-zug 4 --nicht-start "1. d4" -i month.pgn.zst -o other.pgn --tsv other.tsv
+bash lichess_filter.sh --contains d4 --by-move 4 --not-start "1. d4" -i month.pgn.zst -o other.pgn --tsv other.tsv
 python3 zugumstellungen.py my_configuration.json other.tsv
 ```
 

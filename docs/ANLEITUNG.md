@@ -12,7 +12,7 @@ Immer nötig:
 - **Python 3** mit dem Paket `chess` (python-chess). Getestet mit 3.13, ab 3.9 sollte es laufen.
 - **Stockfish**. Name oder voller Pfad steht in der Konfiguration unter `"stockfish"`.
 - **Für das Filterskript:** `bash`, `awk` (`mawk` ist deutlich schneller, das Skript nimmt automatisch das schnellste vorhandene), `zstd`, `curl` für `-m`, optional `pv` für die Fortschrittsanzeige.
-- **Speicherplatz:** Eine Monatsdatei hat etwa 29 GB. Mit `-m` wird gestreamt und nichts gespeichert. `repertoire.sh` streamt ebenfalls, außer mit `--archiv`.
+- **Speicherplatz:** Eine Monatsdatei hat etwa 29 GB. Mit `-m` wird gestreamt und nichts gespeichert. `repertoire.sh` streamt ebenfalls, außer mit `--archive`.
 - **Arbeitsspeicher:** Alle gefilterten Partien werden auf einmal geladen. Noch nicht gemessen, sehr große Datensätze können viel RAM brauchen.
 
 ### macOS
@@ -54,21 +54,21 @@ Quellen:
 `repertoire.sh` erledigt alle Schritte unten auf einmal: Python Umgebung einrichten, Partien streamen und filtern, `konfiguration.json` anlegen und das Repertoire bauen. Alles landet in einem Ordner.
 
 ```bash
-bash repertoire.sh weiss "1. e4"
-bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
+bash repertoire.sh white "1. e4"
+bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 ```
 
 | Option | Bedeutung | Standard |
 |---|---|---|
 | `--elo VON-BIS` | Elo Bereich beider Spieler | 1800-2499 |
-| `--monat JJJJ-MM` | Lichess Monat, mehrere als `JJJJ-MM..JJJJ-MM` | letzter voller Monat |
-| `--monate N` | die letzten N vollen Monate | aus |
-| `--bank ORDNER` | Partienbank: jeder Monat wird einmal in eine Tabelle aller Partien umgewandelt (ohne Bullet und Bots, etwa 5 GB pro Monat). Weitere Analysen suchen nur noch darin, wenige Sekunden pro Monat. Mit `--archiv` wird aus den gespeicherten Monatsdateien gebaut, sonst gestreamt | aus |
-| `--archiv ORDNER` | Monatsdateien dort speichern statt nur streamen (je etwa 29 GB), vorhandene werden wiederverwendet | aus |
-| `--datei DATEI` | eigene Lichess Datei (`.pgn` oder `.pgn.zst`) statt Download | aus |
+| `--month JJJJ-MM` (`--monat`) | Lichess Monat, mehrere als `JJJJ-MM..JJJJ-MM` | letzter voller Monat |
+| `--months N` (`--monate`) | die letzten N vollen Monate | aus |
+| `--bank ORDNER` | Partienbank: jeder Monat wird einmal in eine Tabelle aller Partien umgewandelt (ohne Bullet und Bots, etwa 5 GB pro Monat). Weitere Analysen suchen nur noch darin, wenige Sekunden pro Monat. Mit `--archive` wird aus den gespeicherten Monatsdateien gebaut, sonst gestreamt | aus |
+| `--archive ORDNER` (`--archiv`) | Monatsdateien dort speichern statt nur streamen (je etwa 29 GB), vorhandene werden wiederverwendet | aus |
+| `--file DATEI` (`--datei`) | eigene Lichess Datei (`.pgn` oder `.pgn.zst`) statt Download | aus |
 | `--name NAME` | Ordnername für die Ergebnisse | aus Farbe und Zügen |
 | `--repertoire PGN` | eigenes Repertoire, dessen Züge markiert werden | keins |
-| `--schnell` | schneller Probelauf mit geringer Stockfish Tiefe | aus |
+| `--quick` (`--schnell`) | schneller Probelauf mit geringer Stockfish Tiefe | aus |
 | `--notation de` | Kapitelnamen und Kommentare mit deutschen Figuren (S, L, T, D) | englisch (N, B, R, Q) |
 
 Ein erneuter Aufruf mit gleichen Angaben nutzt die schon geladenen Partien und Stockfish Ergebnisse. Für Feineinstellungen `konfiguration.json` im Ordner bearbeiten (Felder siehe unten) und erneut starten.
@@ -77,18 +77,18 @@ Die folgenden Abschnitte beschreiben die einzelnen Schritte für volle Kontrolle
 
 ## Partienbank für viele Analysen
 
-`partienbank.sh` wandelt Lichess Monate einmalig in kompakte Tabellen aller Partien um, ohne Bullet und Bots, mit allen Eröffnungen und Elo Bereichen und den ersten 40 Halbzügen. `repertoire.sh --bank ORDNER` ruft es automatisch auf und sucht danach nur noch in der Bank.
+`gamebank.sh` wandelt Lichess Monate einmalig in kompakte Tabellen aller Partien um, ohne Bullet und Bots, mit allen Eröffnungen und Elo Bereichen und den ersten 40 Halbzügen. `repertoire.sh --bank ORDNER` ruft es automatisch auf und sucht danach nur noch in der Bank.
 
 ```bash
-bash partienbank.sh ~/partienbank 2026-07 2026-08 2026-09
-bash partienbank.sh ~/partienbank 2026-09 --archiv ~/lichess    # aus gespeicherten Monatsdateien
+bash gamebank.sh ~/gamebank 2026-07 2026-08 2026-09
+bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess    # aus gespeicherten Monatsdateien
 ```
 
 | Option | Bedeutung | Standard |
 |---|---|---|
-| `--archiv ORDNER` | Monatsdateien von dort lesen, fehlende dorthin laden | streamen |
-| `--mit-bullet` | Bullet Partien mit aufnehmen | ohne |
-| `--teile N` | parallele Prozesse | CPU Kerne minus eins, höchstens 8 |
+| `--archive ORDNER` (`--archiv`) | Monatsdateien von dort lesen, fehlende dorthin laden | streamen |
+| `--with-bullet` (`--mit-bullet`) | Bullet Partien mit aufnehmen | ohne |
+| `--jobs N` (`--teile`) | parallele Prozesse | CPU Kerne minus eins, höchstens 8 |
 
 Gemessen an einem 2 GB Ausschnitt aus September 2026: 63 % der Partien bleiben übrig (ohne Bullet und Bots), die Bank ist etwa 2,4 % so groß wie die entpackte PGN. Hochgerechnet sind das rund 5 GB pro Monat statt 29 GB, die Suche nach Startzügen dauert dann unter einer Minute pro Monat statt rund 8 Minuten.
 
@@ -106,22 +106,22 @@ bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o partien.pgn --tsv parti
 
 | Option | Bedeutung | Standard |
 |---|---|---|
-| `-s` | Startzüge, z. B. `"1. e4 c5 2. Nf3"` | Pflicht, außer bei `--enthaelt` |
+| `-s` | Startzüge, z. B. `"1. e4 c5 2. Nf3"` | Pflicht, außer bei `--contains` |
 | `-i` / `-m` | Datei (`.pgn.zst` oder `.pgn`) oder Monat `JJJJ-MM` | eins davon |
 | `-o` | Ausgabe PGN | Pflicht |
 | `--tsv` | zusätzlich Tabelle für `repertoire.py` | aus |
 | `--elo-min` / `--elo-max` | beide Spieler in diesem Bereich | 1800 / 2499 |
-| `--elo-einer` | mindestens ein Spieler ab diesem Wert | aus |
-| `--mit-bullet`, `--mit-bots` | Bullet oder Bot Partien behalten | ohne |
-| `--halbzuege` | Halbzüge in der Tabelle | 40 |
-| `--enthaelt` | ein Zug, der irgendwo in den ersten Zügen vorkommt (für Zugumstellungen) | aus |
-| `--zug-farbe` | wer diesen Zug spielt, `weiss` oder `schwarz` | weiss |
-| `--bis-zug` | spätestens in diesem Zug | 5 |
-| `--nicht-start` | Partien mit diesem Anfang ausschließen | aus |
+| `--elo-one` (`--elo-einer`) | mindestens ein Spieler ab diesem Wert | aus |
+| `--with-bullet`, `--with-bots` (`--mit-bullet`, `--mit-bots`) | Bullet oder Bot Partien behalten | ohne |
+| `--plies` (`--halbzuege`) | Halbzüge in der Tabelle | 40 |
+| `--contains` (`--enthaelt`) | ein Zug, der irgendwo in den ersten Zügen vorkommt (für Zugumstellungen) | aus |
+| `--move-color` (`--zug-farbe`) | wer diesen Zug spielt, `white` oder `black` | white |
+| `--by-move` (`--bis-zug`) | spätestens in diesem Zug | 5 |
+| `--not-start` (`--nicht-start`) | Partien mit diesem Anfang ausschließen | aus |
 
 Bei Schwarz gehören der erste Zug von Weiß und die eigene Antwort in die Startzüge, z. B. `"1. d4 d5"`. Sonst wählt das Skript als Hauptvariante die meistgespielte Antwort, und die muss nicht die eigene sein.
 
-Ein Monat dauert je nach Rechner und Startzügen etwa 5 bis 15 Minuten. Mehrere Monate: Befehl je Monat ausführen und die Tabellen mit `cat` zusammenfügen. `repertoire.sh` macht das mit `--monate` oder `--monat VON..BIS` automatisch und merkt sich jeden fertigen Monat im Unterordner `monate`.
+Ein Monat dauert je nach Rechner und Startzügen etwa 5 bis 15 Minuten. Mehrere Monate: Befehl je Monat ausführen und die Tabellen mit `cat` zusammenfügen. `repertoire.sh` macht das mit `--months` oder `--month VON..BIS` automatisch und merkt sich jeden fertigen Monat im Unterordner `monate`.
 
 ## 2. Konfiguration anlegen
 
@@ -201,7 +201,7 @@ Das Repertoire zählt nur Partien, die mit den Startzügen beginnen. Wie viele P
 
 ```bash
 # Partien, in denen der eigene Schlüsselzug erst später kommt
-bash lichess_filter.sh --enthaelt d4 --bis-zug 4 --nicht-start "1. d4" -i monat.pgn.zst -o andere.pgn --tsv andere.tsv
+bash lichess_filter.sh --contains d4 --by-move 4 --not-start "1. d4" -i monat.pgn.zst -o andere.pgn --tsv andere.tsv
 python3 zugumstellungen.py meine_konfiguration.json andere.tsv
 ```
 

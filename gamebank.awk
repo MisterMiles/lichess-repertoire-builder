@@ -2,7 +2,7 @@
 # ohne Bullet, ohne Bots und ohne Partien ohne Elo. Spalten wie pgn_tabelle.awk:
 #   Site, White, Black, WhiteElo, BlackElo, Result, Termination, TimeControl,
 #   Date, Halbzüge gesamt, letzter Zug, erste N Halbzüge
-# Aufruf: zstd -dc monat.pgn.zst | mawk -v plies=40 -f partienbank.awk > bank.tsv
+# Aufruf: zstd -dc monat.pgn.zst | mawk -v plies=40 -f gamebank.awk > bank.tsv
 # Optionen: -v bullet=1 behält Bullet, -v bots=1 behält Bot Partien,
 #           -v teile=4 -v teil=0 bearbeitet nur jede vierte Partie (für parallele Läufe).
 #

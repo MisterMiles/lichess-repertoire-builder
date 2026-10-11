@@ -1,33 +1,35 @@
 #!/bin/bash
-# Startskript: baut mit einem Befehl ein Eröffnungsrepertoire.
+# Builds an opening repertoire with one command.
 #
-#   ./repertoire.sh weiss "1. e4"
-#   ./repertoire.sh schwarz "1. d4 d5" --elo 1600-2000
+#   bash repertoire.sh white "1. e4"
+#   bash repertoire.sh black "1. d4 d5" --elo 1600-2000
+#   bash repertoire.sh white "1. e4" --months 3 --bank ~/gamebank
 #
-# Optionen:
-#   --elo VON-BIS     Elo Bereich beider Spieler            (Standard 1800-2499)
-#   --monat JJJJ-MM   Lichess Monat                          (Standard: letzter voller Monat)
-#                     mehrere Monate: --monat 2026-07..2026-09
-#   --monate N        die letzten N vollen Monate, z. B. --monate 3
-#   --archiv ORDNER   Monatsdateien dort speichern statt nur streamen (je etwa 29 GB).
-#                     Schon vorhandene Dateien werden genutzt statt neu geladen.
-#   --bank ORDNER     Partienbank: jeder Monat wird einmal in eine kompakte Tabelle aller
-#                     Partien umgewandelt (etwa 5 GB pro Monat). Danach dauert jede weitere
-#                     Analyse mit beliebigen Startzügen und Elo nur Sekunden pro Monat.
-#   --datei DATEI     eigene Lichess Datei (.pgn oder .pgn.zst) statt Download
-#   --name NAME       Name des Ordners für die Ergebnisse     (Standard aus Farbe und Zügen)
-#   --repertoire PGN  eigenes Repertoire, dessen Züge markiert werden
-#   --schnell         schneller Probelauf mit geringer Stockfish Tiefe
-#   --notation de     Kapitelnamen und Kommentare mit deutschen Figuren (S, L, T, D)
-#                     statt englischer (N, B, R, Q). Die Züge selbst bleiben Standard PGN.
+# Options (German names in brackets work as well):
+#   --elo FROM-TO        rating range of both players             (default 1800-2499)
+#   --month YYYY-MM      Lichess month (--monat)                  (default: last full month)
+#                        several months: --month 2026-07..2026-09
+#   --months N           the last N full months (--monate), e.g. --months 3
+#   --archive FOLDER     keep the monthly files there instead of only streaming them
+#                        (--archiv, about 29 GB each). Existing files are reused.
+#   --bank FOLDER        game bank: every month is turned once into a compact table of all
+#                        games (about 5 GB per month). After that every further analysis with
+#                        any starting moves and rating range takes only seconds per month.
+#   --file FILE          your own Lichess file (.pgn or .pgn.zst) instead of the download (--datei)
+#   --name NAME          folder name for the results                (default from colour and moves)
+#   --repertoire PGN     your own repertoire, its moves get marked
+#   --quick              quick trial run with low Stockfish depth (--schnell)
+#   --notation de        German piece letters (S, L, T, D) in chapter names and comments
+#                        instead of English (N, B, R, Q). The moves stay standard PGN.
 #
-# Alles landet in einem Ordner mit dem Namen des Repertoires. Ein zweiter Aufruf
-# mit gleichen Angaben nutzt die schon geladenen Partien und rechnet nur Neues.
-# Feineinstellungen: im Ordner konfiguration.json bearbeiten und erneut starten.
+# Colour: white or black (weiss or schwarz work as well).
+# Everything lands in one folder named after the repertoire. Running again with the
+# same arguments reuses the games and only computes what is missing. For fine tuning
+# edit konfiguration.json in that folder and run again.
 
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-hilfe() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; }
+hilfe() { sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; }
 
 [ $# -lt 2 ] && { hilfe; exit 1; }
 FARBE="$1"; START=$(printf '%s' "$2" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g'); shift 2
@@ -35,26 +37,30 @@ ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; BANK=""; DATEI=""; NAME=""; REP
 while [ $# -gt 0 ]; do
   case "$1" in
     --elo) ELO="$2"; shift 2;;
-    --monat) MONAT="$2"; shift 2;;
-    --monate) ANZAHL="$2"; shift 2;;
-    --archiv) ARCHIV="$2"; shift 2;;
-    --bank) BANK="$2"; shift 2;;
-    --datei) DATEI="$2"; shift 2;;
+    --month|--monat) MONAT="$2"; shift 2;;
+    --months|--monate) ANZAHL="$2"; shift 2;;
+    --archive|--archiv) ARCHIV="$2"; shift 2;;
+    --bank|--gamebank|--partienbank) BANK="$2"; shift 2;;
+    --file|--datei) DATEI="$2"; shift 2;;
     --name) NAME="$2"; shift 2;;
     --repertoire) REP="$2"; shift 2;;
-    --schnell) SCHNELL=1; shift;;
+    --quick|--schnell) SCHNELL=1; shift;;
     --notation) NOTATION="$2"; shift 2;;
-    -h|--help) hilfe; exit 0;;
-    *) echo "Unbekannte Option: $1"; exit 1;;
+    -h|--help|--hilfe) hilfe; exit 0;;
+    *) echo "Unknown option: $1 (bash repertoire.sh --help shows all options)"; exit 1;;
   esac
 done
 case "$FARBE" in
   weiss|weiß|white|w) FARBE=weiss;;
   schwarz|black|b|s) FARBE=schwarz;;
-  *) echo "Farbe bitte als weiss oder schwarz angeben"; exit 1;;
+  *) echo "Colour must be white or black (weiss or schwarz)"; exit 1;;
 esac
 ELO_MIN="${ELO%%-*}"; ELO_MAX="${ELO##*-}"
-[ -z "$NAME" ] && NAME="${FARBE}_$(printf '%s' "$START" | tr -cd 'A-Za-z0-9 ' | tr -s ' ' '_')"
+if [ -z "$NAME" ]; then
+  ZUEGE="$(printf '%s' "$START" | tr -cd 'A-Za-z0-9 ' | tr -s ' ' '_')"
+  NAME="$( [ "$FARBE" = weiss ] && echo white || echo black )_$ZUEGE"
+  [ ! -d "$PWD/$NAME" ] && [ -d "$PWD/${FARBE}_$ZUEGE" ] && NAME="${FARBE}_$ZUEGE"   # Ordner aus früheren Versionen
+fi
 OUT="$PWD/$NAME"
 
 # Benötigte Programme prüfen
@@ -135,8 +141,8 @@ PYEOF
   AWK=awk; command -v gawk >/dev/null 2>&1 && AWK=gawk; command -v mawk >/dev/null 2>&1 && AWK=mawk
   STARTZ=$(printf '%s' "$START" | sed -E 's/[0-9]+\.+ ?/ /g' | tr -s ' ' | sed -E 's/^ //; s/ $//')
   if [ -n "$BANK" ]; then
-    BANKARGS=(); [ -n "$ARCHIV" ] && BANKARGS=(--archiv "$ARCHIV")
-    bash "$DIR/partienbank.sh" "$BANK" $MONATE "${BANKARGS[@]}"
+    BANKARGS=(); [ -n "$ARCHIV" ] && BANKARGS=(--archive "$ARCHIV")
+    bash "$DIR/gamebank.sh" "$BANK" $MONATE "${BANKARGS[@]}"
   fi
   for M in $MONATE; do
     ZIEL="$OUT/monate/partien_${M}_elo${ELO_MIN}-${ELO_MAX}"

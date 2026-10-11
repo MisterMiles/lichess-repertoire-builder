@@ -1,29 +1,28 @@
 #!/bin/bash
-# Filtert eine Lichess Monatsdatei (database.lichess.org) nach Startzügen,
-# Elo, Bedenkzeit und Bots. Optional entsteht zusätzlich eine kompakte Tabelle
-# (TSV) für repertoire.py.
+# Filters a Lichess monthly file (database.lichess.org) by starting moves, rating,
+# time control and bots. Optionally also writes a compact table (TSV) for repertoire.py.
 #
-# Beispiele:
-#   bash lichess_filter.sh -s "1. e4" -i lichess_db_standard_rated_2026-09.pgn.zst -o partien.pgn --tsv partien.tsv
-#   bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o partien.pgn --tsv partien.tsv
-#   bash lichess_filter.sh -s "1. e4" -i datei.pgn.zst --elo-einer 2500 --elo-min 2300 --elo-max 3500 -o stark.pgn
+# Examples:
+#   bash lichess_filter.sh -s "1. e4" -i lichess_db_standard_rated_2026-09.pgn.zst -o games.pgn --tsv games.tsv
+#   bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o games.pgn --tsv games.tsv
+#   bash lichess_filter.sh -s "1. e4" -i file.pgn.zst --elo-one 2500 --elo-min 2300 --elo-max 3500 -o strong.pgn
 #
-# Optionen:
-#   -s, --start "ZÜGE"   Startzüge in englischer Notation, z. B. "1. e4 c5 2. Nf3"
-#   --enthaelt ZUG       stattdessen: dieser Zug kommt in den ersten Zügen vor (für Zugumstellungen)
-#   --zug-farbe weiss|schwarz   wer den Zug aus --enthaelt spielt          (Standard weiss)
-#   --bis-zug N          spätestens in Zug N                                 (Standard 5)
-#   --nicht-start "ZÜGE" Partien mit diesem Anfang ausschließen (z. B. die eigenen Startzüge)
-#   -i, --input DATEI    .pgn.zst oder .pgn (lokal)
-#   -m, --monat JJJJ-MM  stattdessen direkt von database.lichess.org streamen (nichts wird gespeichert)
-#   -o, --output DATEI   Ausgabe PGN (Pflicht)
-#   --tsv DATEI          zusätzlich kompakte Tabelle für repertoire.py schreiben
-#   --elo-min N          beide Spieler mindestens N        (Standard 1800)
-#   --elo-max N          beide Spieler höchstens N         (Standard 2499)
-#   --elo-einer N        mindestens ein Spieler ab N       (Standard 0, aus)
-#   --mit-bullet         Bullet und UltraBullet behalten   (Standard: ohne)
-#   --mit-bots           Bot Partien behalten              (Standard: ohne)
-#   --halbzuege N        Halbzüge in der Tabelle           (Standard 40)
+# Options (German names in brackets work as well):
+#   -s, --start "MOVES"     starting moves in English notation, e.g. "1. e4 c5 2. Nf3"
+#   --contains MOVE         instead: this move appears in the first moves (--enthaelt, for transpositions)
+#   --move-color white|black  who plays the move from --contains (--zug-farbe, default white)
+#   --by-move N             at the latest in move N (--bis-zug, default 5)
+#   --not-start "MOVES"     exclude games starting like this (--nicht-start)
+#   -i, --input FILE        .pgn.zst or .pgn (local)
+#   -m, --month YYYY-MM     instead stream from database.lichess.org, nothing is stored (--monat)
+#   -o, --output FILE       output PGN (required)
+#   --tsv FILE              also write a compact table for repertoire.py
+#   --elo-min N             both players at least N              (default 1800)
+#   --elo-max N             both players at most N               (default 2499)
+#   --elo-one N             at least one player from N (--elo-einer, default 0, off)
+#   --with-bullet           keep bullet and ultrabullet (--mit-bullet, default: without)
+#   --with-bots             keep bot games (--mit-bots, default: without)
+#   --plies N               half moves in the table (--halbzuege, default 40)
 
 set -o pipefail
 START=""; ENTH=""; ZFARBE="weiss"; BISZUG=5; NSTART=""; INPUT=""; MONAT=""; OUT=""; TSV=""
@@ -34,21 +33,21 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -s|--start) START="$2"; shift 2;;
     -i|--input) INPUT="$2"; shift 2;;
-    --enthaelt) ENTH="$2"; shift 2;;
-    --zug-farbe) ZFARBE="$2"; shift 2;;
-    --bis-zug) BISZUG="$2"; shift 2;;
-    --nicht-start) NSTART="$2"; shift 2;;
-    -m|--monat) MONAT="$2"; shift 2;;
+    --contains|--enthaelt) ENTH="$2"; shift 2;;
+    --move-color|--zug-farbe) ZFARBE="$2"; shift 2;;
+    --by-move|--bis-zug) BISZUG="$2"; shift 2;;
+    --not-start|--nicht-start) NSTART="$2"; shift 2;;
+    -m|--month|--monat) MONAT="$2"; shift 2;;
     -o|--output) OUT="$2"; shift 2;;
     --tsv) TSV="$2"; shift 2;;
     --elo-min) ELO_MIN="$2"; shift 2;;
     --elo-max) ELO_MAX="$2"; shift 2;;
-    --elo-einer) ELO_EINER="$2"; shift 2;;
-    --mit-bullet) BULLET=1; shift;;
-    --mit-bots) BOTS=1; shift;;
-    --halbzuege) PLIES="$2"; shift 2;;
-    -h|--help) sed -n '2,26p' "$0"; exit 0;;
-    *) echo "Unbekannte Option: $1"; exit 1;;
+    --elo-one|--elo-einer) ELO_EINER="$2"; shift 2;;
+    --with-bullet|--mit-bullet) BULLET=1; shift;;
+    --with-bots|--mit-bots) BOTS=1; shift;;
+    --plies|--halbzuege) PLIES="$2"; shift 2;;
+    -h|--help|--hilfe) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
+    *) echo "Unknown option: $1"; exit 1;;
   esac
 done
 [ -z "$START" ] && [ -z "$ENTH" ] && { echo "Bitte Startzüge (-s \"1. e4\") oder --enthaelt ZUG angeben"; exit 1; }
@@ -82,7 +81,7 @@ function norm(s) {
   sub(/^ /, "", s); return s " "
 }
 BEGIN { if (start != "") { st = norm(start); split(st, f, " "); first = f[1] " " f[2] " " }
-        if (nstart != "") ns = norm(nstart); weiss = (zfarbe !~ /^s/) }
+        if (nstart != "") ns = norm(nstart); weiss = (zfarbe !~ /^[sbSB]/) }
 function enthaelt(m,   s, t, n, i, nr, seite) {
   if (index(substr(m, 1, biszug * 70 + 200), enth) == 0) return 0
   s = norm(m); n = split(s, t, " "); nr = 0; seite = 0

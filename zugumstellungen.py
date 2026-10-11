@@ -5,7 +5,7 @@ Aufruf:  python3 zugumstellungen.py konfiguration.json andere.tsv
 
 andere.tsv entsteht mit lichess_filter.sh, z. B. alle Partien, in denen der
 eigene Schlüsselzug erst später kommt:
-  bash lichess_filter.sh --enthaelt d4 --bis-zug 4 --nicht-start "1. d4" -i monat.pgn.zst -o andere.pgn --tsv andere.tsv
+  bash lichess_filter.sh --contains d4 --by-move 4 --not-start "1. d4" -i monat.pgn.zst -o andere.pgn --tsv andere.tsv
 
 Gezählt werden die Stellungen, die im Repertoire vorkommen (gleiche Regeln
 wie repertoire.py), also nur Züge, die man selbst auch spielt.
