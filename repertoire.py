@@ -143,9 +143,12 @@ def lade_partien(cfg):
             if p == S: struktur = strukturdaten(b, ich)
         if struktur: strukturen.append((struktur, tuple(sorted(hebel)), pkt))
     fs.fertig()
-    print(f"  Partien mit Startzügen: {n_ges}, davon mit Systemregel: {n_sys}, ausgewertet: {n_pool}", flush=True)
+    daten_bis = [f[8] for f in alle if re.fullmatch(r"\d{4}\.\d{2}\.\d{2}", f[8])]
+    von, bis = (min(daten_bis), max(daten_bis)) if daten_bis else ("", "")
+    print(f"  Partien mit Startzügen: {n_ges}, davon mit Systemregel: {n_sys}, ausgewertet: {n_pool}"
+          + (f", Zeitraum {von} bis {bis}" if von else ""), flush=True)
     return {"zaehler": zaehler, "punkte": punkte, "erreicht": erreicht, "alle": alle, "strukturen": strukturen,
-            "n_ges": n_ges, "n_sys": n_sys, "n_pool": n_pool}
+            "n_ges": n_ges, "n_sys": n_sys, "n_pool": n_pool, "von": von, "bis": bis}
 
 def hebel_zug(b, mv):
     """Bauernzug, der schlägt oder einen gegnerischen Bauern angreift."""
@@ -605,6 +608,10 @@ def blaetter(d, out):
     if not d["kids"] and not d["transpo"]: out.add(d["fa"])
     for k in d["kids"]: blaetter(k, out)
 
+def datum_de(d):
+    j, m, t = d.split(".")
+    return f"{int(t)}.{int(m)}.{j}"
+
 def neues_spiel(cfg, titel, fen=None):
     heute = datetime.date.today().strftime("%Y.%m.%d")
     g = chess.pgn.Game(); g.headers.clear()
@@ -764,7 +771,9 @@ def main():
     w = Schreiber(cfg, kapitel, sf, muster, fehler_karte); w.plaene = plaene
     gegner = seite(not ich)
     info = (f"{cfg['titel']}. Repertoire für {seite(ich)}, Startzüge {de(cfg['start'], cfg)}. "
-            f"Daten: {daten['n_ges']} Lichess Partien, davon {daten['n_pool']} ausgewertet. "
+            f"Daten: {daten['n_ges']} Lichess Partien"
+            + (f" vom {datum_de(daten['von'])} bis {datum_de(daten['bis'])}" if daten["von"] else "")
+            + f", davon {daten['n_pool']} ausgewertet. "
             f"REGELN: Bei jedem Zug von {gegner} die {cfg['antworten']} meistgespielten Antworten, in den Zügen "
             f"{', '.join(map(str, cfg['fruehe_zuege_ab_5_prozent']))} zusätzlich jede ab 5 %. Bei {seite(ich)} ist der meistgespielte Zug Hauptvariante, "
             f"der Repertoirezug steht markiert daneben. Eine Linie verzweigt, solange mindestens {cfg['min_partien']} Partien die Stellung erreichen, "

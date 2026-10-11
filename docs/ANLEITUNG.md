@@ -12,7 +12,7 @@ Immer nötig:
 - **Python 3** mit dem Paket `chess` (python-chess). Getestet mit 3.13, ab 3.9 sollte es laufen.
 - **Stockfish**. Name oder voller Pfad steht in der Konfiguration unter `"stockfish"`.
 - **Für das Filterskript:** `bash`, `awk` (`mawk` ist deutlich schneller, das Skript nimmt automatisch das schnellste vorhandene), `zstd`, `curl` für `-m`, optional `pv` für die Fortschrittsanzeige.
-- **Speicherplatz:** Eine Monatsdatei hat etwa 29 GB. Mit `-m` wird gestreamt und nichts gespeichert.
+- **Speicherplatz:** Eine Monatsdatei hat etwa 29 GB. Mit `-m` wird gestreamt und nichts gespeichert. `repertoire.sh` streamt ebenfalls, außer mit `--archiv`.
 - **Arbeitsspeicher:** Alle gefilterten Partien werden auf einmal geladen. Noch nicht gemessen, sehr große Datensätze können viel RAM brauchen.
 
 ### macOS
@@ -61,7 +61,9 @@ bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
 | Option | Bedeutung | Standard |
 |---|---|---|
 | `--elo VON-BIS` | Elo Bereich beider Spieler | 1800-2499 |
-| `--monat JJJJ-MM` | Lichess Monat | letzter voller Monat |
+| `--monat JJJJ-MM` | Lichess Monat, mehrere als `JJJJ-MM..JJJJ-MM` | letzter voller Monat |
+| `--monate N` | die letzten N vollen Monate | aus |
+| `--archiv ORDNER` | Monatsdateien dort speichern statt nur streamen (je etwa 29 GB), vorhandene werden wiederverwendet | aus |
 | `--datei DATEI` | eigene Lichess Datei (`.pgn` oder `.pgn.zst`) statt Download | aus |
 | `--name NAME` | Ordnername für die Ergebnisse | aus Farbe und Zügen |
 | `--repertoire PGN` | eigenes Repertoire, dessen Züge markiert werden | keins |
@@ -100,7 +102,7 @@ bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o partien.pgn --tsv parti
 
 Bei Schwarz gehören der erste Zug von Weiß und die eigene Antwort in die Startzüge, z. B. `"1. d4 d5"`. Sonst wählt das Skript als Hauptvariante die meistgespielte Antwort, und die muss nicht die eigene sein.
 
-Ein Monat dauert je nach Rechner und Startzügen etwa 5 bis 15 Minuten. Mehrere Monate: Befehl je Monat ausführen und die Tabellen mit `cat` zusammenfügen.
+Ein Monat dauert je nach Rechner und Startzügen etwa 5 bis 15 Minuten. Mehrere Monate: Befehl je Monat ausführen und die Tabellen mit `cat` zusammenfügen. `repertoire.sh` macht das mit `--monate` oder `--monat VON..BIS` automatisch und merkt sich jeden fertigen Monat im Unterordner `monate`.
 
 ## 2. Konfiguration anlegen
 

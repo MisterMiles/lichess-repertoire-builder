@@ -7,6 +7,10 @@
 # Optionen:
 #   --elo VON-BIS     Elo Bereich beider Spieler            (Standard 1800-2499)
 #   --monat JJJJ-MM   Lichess Monat                          (Standard: letzter voller Monat)
+#                     mehrere Monate: --monat 2026-07..2026-09
+#   --monate N        die letzten N vollen Monate, z. B. --monate 3
+#   --archiv ORDNER   Monatsdateien dort speichern statt nur streamen (je etwa 29 GB).
+#                     Schon vorhandene Dateien werden genutzt statt neu geladen.
 #   --datei DATEI     eigene Lichess Datei (.pgn oder .pgn.zst) statt Download
 #   --name NAME       Name des Ordners für die Ergebnisse     (Standard aus Farbe und Zügen)
 #   --repertoire PGN  eigenes Repertoire, dessen Züge markiert werden
@@ -18,15 +22,17 @@
 
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-hilfe() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; }
+hilfe() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; }
 
 [ $# -lt 2 ] && { hilfe; exit 1; }
 FARBE="$1"; START="$2"; shift 2
-ELO="1800-2499"; MONAT=""; DATEI=""; NAME=""; REP=""; SCHNELL=""
+ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; DATEI=""; NAME=""; REP=""; SCHNELL=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --elo) ELO="$2"; shift 2;;
     --monat) MONAT="$2"; shift 2;;
+    --monate) ANZAHL="$2"; shift 2;;
+    --archiv) ARCHIV="$2"; shift 2;;
     --datei) DATEI="$2"; shift 2;;
     --name) NAME="$2"; shift 2;;
     --repertoire) REP="$2"; shift 2;;
@@ -69,15 +75,58 @@ mkdir -p "$OUT"
 echo "Repertoire: $FARBE, Startzüge \"$START\", Elo $ELO_MIN bis $ELO_MAX, Ordner $OUT"
 
 # 1. Partien holen und filtern
-if [ -s "$OUT/partien.tsv" ]; then
-  echo "Partien schon vorhanden ($OUT/partien.tsv). Zum Neuladen die Datei löschen."
-elif [ -n "$DATEI" ]; then
-  bash "$DIR/lichess_filter.sh" -s "$START" -i "$DATEI" -o "$OUT/partien.pgn" --tsv "$OUT/partien.tsv" --elo-min "$ELO_MIN" --elo-max "$ELO_MAX"
+filtern() {  # $1 Quelle (-i DATEI oder -m MONAT), $2 Wert, $3 Ziel ohne Endung
+  bash "$DIR/lichess_filter.sh" -s "$START" "$1" "$2" -o "$3.pgn" --tsv "$3.tsv" --elo-min "$ELO_MIN" --elo-max "$ELO_MAX"
+}
+if [ -n "$DATEI" ]; then
+  if [ -s "$OUT/partien.tsv" ]; then
+    echo "Partien schon vorhanden ($OUT/partien.tsv). Zum Neuladen die Datei löschen."
+  else
+    filtern -i "$DATEI" "$OUT/partien"
+  fi
 else
-  [ -z "$MONAT" ] && MONAT=$(python3 -c "import datetime as d; t=d.date.today().replace(day=1)-d.timedelta(days=1); print(t.strftime('%Y-%m'))")
-  echo "Lade Lichess Partien aus $MONAT. Die Datei (etwa 29 GB) wird gestreamt und nicht gespeichert."
-  echo "Das dauert je nach Internetleitung 30 Minuten bis einige Stunden."
-  bash "$DIR/lichess_filter.sh" -s "$START" -m "$MONAT" -o "$OUT/partien.pgn" --tsv "$OUT/partien.tsv" --elo-min "$ELO_MIN" --elo-max "$ELO_MAX"
+  # Liste der Monate bestimmen: einzelner Monat, Bereich VON..BIS oder die letzten N
+  MONATE=$(python3 - "$MONAT" "$ANZAHL" <<'PYEOF'
+import sys, re, datetime as d
+arg, anzahl = sys.argv[1], sys.argv[2]
+def plus(y, m, k):
+    m += k; return y + (m - 1) // 12, (m - 1) % 12 + 1
+t = d.date.today().replace(day=1) - d.timedelta(days=1)
+if anzahl:
+    n = int(anzahl); out = [plus(t.year, t.month, -i) for i in range(n - 1, -1, -1)]
+elif ".." in arg:
+    a, b = [tuple(map(int, x.split("-"))) for x in arg.split("..")]
+    out = []
+    while a <= b: out.append(a); a = plus(*a, 1)
+elif arg:
+    out = [tuple(map(int, arg.split("-")))]
+else:
+    out = [(t.year, t.month)]
+print(" ".join(f"{y:04d}-{m:02d}" for y, m in out))
+PYEOF
+  ) || { echo "Monat bitte als JJJJ-MM, JJJJ-MM..JJJJ-MM oder mit --monate N angeben"; exit 1; }
+  set -- $MONATE; echo "Monate: $* ($# insgesamt)"
+  mkdir -p "$OUT/monate"; [ -n "$ARCHIV" ] && mkdir -p "$ARCHIV"
+  for M in $MONATE; do
+    ZIEL="$OUT/monate/partien_$M"
+    if [ -s "$ZIEL.tsv" ]; then echo "$M: schon gefiltert, wird wiederverwendet."; continue; fi
+    URL="https://database.lichess.org/standard/lichess_db_standard_rated_${M}.pgn.zst"
+    if [ -n "$ARCHIV" ]; then
+      F="$ARCHIV/lichess_db_standard_rated_${M}.pgn.zst"
+      if [ ! -s "$F" ]; then
+        echo "$M: lade Monatsdatei nach $F (etwa 29 GB, abgebrochene Downloads werden fortgesetzt)"
+        curl -fL -C - --retry 5 --retry-delay 10 -# -o "$F.part" "$URL" || { echo "$M: Download fehlgeschlagen. Nochmal starten setzt ihn fort."; exit 1; }
+        mv "$F.part" "$F"
+      fi
+      echo "$M: filtere $F"; filtern -i "$F" "$ZIEL"
+    else
+      echo "$M: streame und filtere (etwa 29 GB, nichts davon wird gespeichert)"
+      filtern -m "$M" "$ZIEL"
+    fi
+  done
+  # Tabelle aus allen gewünschten Monaten neu zusammensetzen
+  for M in $MONATE; do cat "$OUT/monate/partien_$M.tsv"; done > "$OUT/partien.tsv.tmp" && mv "$OUT/partien.tsv.tmp" "$OUT/partien.tsv"
+  echo "Zusammen: $(wc -l < "$OUT/partien.tsv" | tr -d ' ') Partien aus $# Monaten"
 fi
 
 # 2. Konfiguration anlegen (nur beim ersten Mal)

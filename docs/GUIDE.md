@@ -14,7 +14,7 @@ Always needed:
 - **Python 3** with the package `chess` (python-chess). Tested with 3.13, 3.9 or newer should work.
 - **Stockfish**. Set its name or full path in the configuration under `"stockfish"`.
 - **For the filter script:** `bash`, `awk` (`mawk` is much faster, the script picks the fastest one available), `zstd`, `curl` for `-m`, optionally `pv` for a progress display.
-- **Disk:** a monthly file is about 29 GB. With `-m` the file is streamed and not stored.
+- **Disk:** a monthly file is about 29 GB. With `-m` the file is streamed and not stored. `repertoire.sh` streams as well, unless you use `--archiv`.
 - **Memory:** all filtered games are loaded at once. Not measured yet, very large data sets may need a lot of RAM.
 
 ### macOS
@@ -63,7 +63,9 @@ bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
 | Option | Meaning | Default |
 |---|---|---|
 | `--elo FROM-TO` | rating range of both players | 1800-2499 |
-| `--monat YYYY-MM` | Lichess month | last full month |
+| `--monat YYYY-MM` | Lichess month, several as `YYYY-MM..YYYY-MM` | last full month |
+| `--monate N` | the last N full months | off |
+| `--archiv FOLDER` | keep the monthly files there instead of only streaming (about 29 GB each), existing ones are reused | off |
 | `--datei FILE` | your own Lichess file (`.pgn` or `.pgn.zst`) instead of the download | off |
 | `--name NAME` | folder name for the results | from colour and moves |
 | `--repertoire PGN` | your own repertoire, its moves get marked | none |
@@ -102,7 +104,7 @@ bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o games.pgn --tsv games.t
 
 For Black, include White's first move and your own reply in the starting moves, e.g. `"1. d4 d5"`. Otherwise the script takes the most played reply as the main line, which may not be yours.
 
-One month takes about 5 to 15 minutes depending on the machine and the starting moves. For several months, run the command per month and join the tables with `cat`.
+One month takes about 5 to 15 minutes depending on the machine and the starting moves. For several months, run the command per month and join the tables with `cat`. `repertoire.sh` does this automatically with `--monate` or `--monat FROM..TO` and remembers every finished month in the subfolder `monate`.
 
 ## 2. Create a configuration
 

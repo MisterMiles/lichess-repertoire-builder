@@ -39,6 +39,9 @@ bash repertoire.sh weiss "1. e4"
 
 # Black against 1.d4 with 1...d5, opponents rated 1600 to 2000, quick trial run first
 bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
+
+# More games: the last three months instead of one
+bash repertoire.sh weiss "1. e4" --monate 3
 ```
 
 `weiss` means White, `schwarz` means Black (`white` and `black` work too). Moves use English notation. For Black, include your own reply in the starting moves.
@@ -54,6 +57,7 @@ The PGN comments are in German.
 ## Good to know
 
 - **Time:** the games of one Lichess month are streamed from the internet (about 29 GB, nothing of it is stored). Depending on your connection this takes 30 minutes to a few hours. Stockfish then needs 15 to 60 minutes. With `--schnell` you see a result within minutes once the games are in.
+- **More games:** `--monate 3` takes the last three full months, `--monat 2026-07..2026-09` a fixed range. Every month is downloaded and filtered on its own, so the waiting time grows with it. With `--archiv FOLDER` the monthly files are kept (about 29 GB each) and are not downloaded again next time.
 - **Running again:** with the same arguments the script reuses the downloaded games and only computes what is missing.
 - **Linux:** instead of Homebrew use `sudo apt install python3-venv zstd pv mawk stockfish`, the rest is the same.
 - **More settings:** rating range, month, your own repertoire and every fine tuning option are in the [full guide](docs/GUIDE.md).

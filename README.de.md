@@ -39,6 +39,9 @@ bash repertoire.sh weiss "1. e4"
 
 # Schwarz gegen 1.d4 mit 1...d5, Gegner zwischen 1600 und 2000, zuerst als schneller Probelauf
 bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
+
+# Mehr Partien: die letzten drei Monate statt nur einem
+bash repertoire.sh weiss "1. e4" --monate 3
 ```
 
 Züge schreibst du in englischer Notation: N Springer, B Läufer, R Turm, Q Dame, K König. Bei Schwarz gehört deine eigene Antwort mit in die Startzüge.
@@ -52,6 +55,7 @@ Einen Ordner mit dem Namen deines Repertoires, darin:
 ## Gut zu wissen
 
 - **Dauer:** Die Partien eines Lichess Monats werden aus dem Internet gestreamt (etwa 29 GB, nichts davon wird gespeichert). Das dauert je nach Leitung 30 Minuten bis einige Stunden. Danach rechnet Stockfish 15 bis 60 Minuten. Mit `--schnell` siehst du das Ergebnis in wenigen Minuten, sobald die Partien da sind.
+- **Mehr Partien:** `--monate 3` nimmt die letzten drei vollen Monate, `--monat 2026-07..2026-09` einen festen Zeitraum. Jeder Monat wird einzeln geladen und gefiltert, die Wartezeit wächst also mit. Mit `--archiv ORDNER` bleiben die Monatsdateien gespeichert (je etwa 29 GB) und werden beim nächsten Mal nicht neu geladen.
 - **Nochmal starten:** Mit den gleichen Angaben nutzt das Skript die schon geladenen Partien und rechnet nur, was fehlt.
 - **Linux:** Statt Homebrew `sudo apt install python3-venv zstd pv mawk stockfish`, der Rest ist gleich.
 - **Mehr Einstellungen:** Elo, Monat, eigenes Repertoire und alle Feineinstellungen stehen in der [ausführlichen Anleitung](docs/ANLEITUNG.md).

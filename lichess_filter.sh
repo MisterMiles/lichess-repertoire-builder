@@ -139,6 +139,6 @@ else
 fi
 
 if [ -n "$TSV" ]; then
-  LC_ALL=C "$AWK" -v plies="$PLIES" -f "$DIR/pgn_tabelle.awk" "$OUT" > "$TSV"
+  LC_ALL=C "$AWK" -v plies="$PLIES" -f "$DIR/pgn_tabelle.awk" "$OUT" > "$TSV.tmp" && mv "$TSV.tmp" "$TSV"
   echo "Tabelle: $TSV ($(wc -l < "$TSV" | tr -d ' ') Partien)" >&2
 fi
