@@ -608,8 +608,9 @@ def blaetter(d, out):
 def neues_spiel(cfg, titel, fen=None):
     heute = datetime.date.today().strftime("%Y.%m.%d")
     g = chess.pgn.Game(); g.headers.clear()
-    # Ohne Black Tag: Lichess benennt Kapitel beim Import sonst "Titel - ?"
-    for k, v in (("Event", "?"), ("Site", "?"), ("Date", heute), ("Round", "?"), ("White", titel),
+    # Kapitelname nur in Event und ChapterName, ohne White/Black Tags. Sonst zeigen
+    # Lichess und En Croissant den Namen als "Titel - ?" an.
+    for k, v in (("Event", titel), ("Site", "?"), ("Date", heute), ("Round", "?"),
                  ("Result", "*"), ("ECO", cfg["eco"]), ("Annotator", "repertoire.py (Lichess, Stockfish)"),
                  ("PlyCount", "0"), ("SourceTitle", cfg["titel"]), ("SourceVersionDate", heute)):
         g.headers[k] = v
@@ -815,7 +816,8 @@ def main():
         while True:
             g0 = chess.pgn.read_game(h)
             if g0 is None: break
-            titel = g0.headers.get("ChapterName") or (g0.headers.get("White", "?") if g0.headers.get("Black", "?") == "?" else g0.headers.get("Black"))
+            titel = (g0.headers.get("ChapterName") or g0.headers.get("Black", "?").strip("?")
+                     or g0.headers.get("White", "?").strip("?") or g0.headers.get("Event", "?"))
             titel = re.sub(r"^\d+ ", "", titel)
             g = neues_spiel(cfg, f"{nr:02d} {titel}"); g.comment = g0.comment
             def kopie(src, dst):
