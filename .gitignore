@@ -1,0 +1,9 @@
+# Daten und Ergebnisse gehören nicht ins Repo
+*.pgn
+*.pgn.zst
+*.zst
+*.tsv
+*.tmp
+*_stockfish.json
+__pycache__/
+.DS_Store

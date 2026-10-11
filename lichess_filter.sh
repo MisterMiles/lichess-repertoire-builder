@@ -9,7 +9,11 @@
 #   bash lichess_filter.sh -s "1. e4" -i datei.pgn.zst --elo-einer 2500 --elo-min 2300 --elo-max 3500 -o stark.pgn
 #
 # Optionen:
-#   -s, --start "ZÜGE"   Startzüge in englischer Notation, z. B. "1. e4 c5 2. Nf3"   (Pflicht)
+#   -s, --start "ZÜGE"   Startzüge in englischer Notation, z. B. "1. e4 c5 2. Nf3"
+#   --enthaelt ZUG       stattdessen: dieser Zug kommt in den ersten Zügen vor (für Zugumstellungen)
+#   --zug-farbe weiss|schwarz   wer den Zug aus --enthaelt spielt          (Standard weiss)
+#   --bis-zug N          spätestens in Zug N                                 (Standard 5)
+#   --nicht-start "ZÜGE" Partien mit diesem Anfang ausschließen (z. B. die eigenen Startzüge)
 #   -i, --input DATEI    .pgn.zst oder .pgn (lokal)
 #   -m, --monat JJJJ-MM  stattdessen direkt von database.lichess.org streamen (nichts wird gespeichert)
 #   -o, --output DATEI   Ausgabe PGN (Pflicht)
@@ -22,7 +26,7 @@
 #   --halbzuege N        Halbzüge in der Tabelle           (Standard 30)
 
 set -o pipefail
-START=""; INPUT=""; MONAT=""; OUT=""; TSV=""
+START=""; ENTH=""; ZFARBE="weiss"; BISZUG=5; NSTART=""; INPUT=""; MONAT=""; OUT=""; TSV=""
 ELO_MIN=1800; ELO_MAX=2499; ELO_EINER=0; BULLET=0; BOTS=0; PLIES=30
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -30,6 +34,10 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -s|--start) START="$2"; shift 2;;
     -i|--input) INPUT="$2"; shift 2;;
+    --enthaelt) ENTH="$2"; shift 2;;
+    --zug-farbe) ZFARBE="$2"; shift 2;;
+    --bis-zug) BISZUG="$2"; shift 2;;
+    --nicht-start) NSTART="$2"; shift 2;;
     -m|--monat) MONAT="$2"; shift 2;;
     -o|--output) OUT="$2"; shift 2;;
     --tsv) TSV="$2"; shift 2;;
@@ -43,9 +51,10 @@ while [ $# -gt 0 ]; do
     *) echo "Unbekannte Option: $1"; exit 1;;
   esac
 done
-[ -z "$START" ] && { echo "Bitte Startzüge angeben, z. B. -s \"1. e4\""; exit 1; }
+[ -z "$START" ] && [ -z "$ENTH" ] && { echo "Bitte Startzüge (-s \"1. e4\") oder --enthaelt ZUG angeben"; exit 1; }
 # "1.e4" wie "1. e4" behandeln
 START=$(printf '%s' "$START" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g')
+NSTART=$(printf '%s' "$NSTART" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g')
 [ -z "$OUT" ] && { echo "Bitte Ausgabedatei angeben: -o datei.pgn"; exit 1; }
 [ -z "$INPUT" ] && [ -z "$MONAT" ] && { echo "Bitte -i DATEI oder -m JJJJ-MM angeben"; exit 1; }
 
@@ -66,17 +75,33 @@ quelle() {
 
 filter() {
 LC_ALL=C "$AWK" -v start="$START" -v emin="$ELO_MIN" -v emax="$ELO_MAX" -v eeiner="$ELO_EINER" \
-  -v bullet="$BULLET" -v bots="$BOTS" '
+  -v bullet="$BULLET" -v bots="$BOTS" -v enth="$ENTH" -v zfarbe="$ZFARBE" -v biszug="$BISZUG" -v nstart="$NSTART" '
 function norm(s) {
   gsub(/\{[^}]*\}/, "", s); gsub(/\([^()]*\)/, "", s)
   gsub(/[0-9]+\.\.\./, "", s); gsub(/[?!]+/, "", s); gsub(/[ \t]+/, " ", s)
   sub(/^ /, "", s); return s " "
 }
-BEGIN { st = norm(start); split(st, f, " "); first = f[1] " " f[2] " " }
+BEGIN { if (start != "") { st = norm(start); split(st, f, " "); first = f[1] " " f[2] " " }
+        if (nstart != "") ns = norm(nstart); weiss = (zfarbe !~ /^s/) }
+function enthaelt(m,   s, t, n, i, nr, seite) {
+  if (index(substr(m, 1, biszug * 70 + 200), enth) == 0) return 0
+  s = norm(m); n = split(s, t, " "); nr = 0; seite = 0
+  for (i = 1; i <= n; i++) {
+    if (t[i] ~ /^[0-9]+\.$/) { nr = t[i] + 0; seite = 0; continue }
+    if (nr > biszug) return 0
+    if (t[i] == enth && ((seite == 0) == weiss)) return 1
+    seite = 1
+  }
+  return 0
+}
 function flush() {
   if (n == 0) return
-  ok = (index(moves, first) == 1)
-  if (ok && length(st) > length(first)) ok = (index(norm(moves), st) == 1)
+  if (start != "") {
+    ok = (index(moves, first) == 1)
+    if (ok && length(st) > length(first)) ok = (index(norm(moves), st) == 1)
+  } else ok = 1
+  if (ok && enth != "") ok = enthaelt(moves)
+  if (ok && ns != "") ok = (index(norm(moves), ns) != 1)
   if (ok && !bullet && ev ~ /Bullet/) ok = 0
   if (ok && !bots && bot) ok = 0
   if (ok && (we == "" || be == "")) ok = 0
@@ -105,7 +130,7 @@ if [ -n "$MONAT" ] || [[ "$INPUT" == *.zst ]]; then
   command -v zstd >/dev/null 2>&1 || { echo "zstd fehlt: brew install zstd"; exit 1; }
 fi
 
-echo "Filter: Start \"$START\", Elo $ELO_MIN bis $ELO_MAX$( [ "$ELO_EINER" -gt 0 ] && echo ", einer ab $ELO_EINER"), Bullet $( [ $BULLET = 1 ] && echo mit || echo ohne), Bots $( [ $BOTS = 1 ] && echo mit || echo ohne)" >&2
+echo "Filter: Start \"$START\"$( [ -n "$ENTH" ] && echo ", enthält $ENTH bis Zug $BISZUG")$( [ -n "$NSTART" ] && echo ", ohne Anfang $NSTART"), Elo $ELO_MIN bis $ELO_MAX$( [ "$ELO_EINER" -gt 0 ] && echo ", einer ab $ELO_EINER"), Bullet $( [ $BULLET = 1 ] && echo mit || echo ohne), Bots $( [ $BOTS = 1 ] && echo mit || echo ohne)" >&2
 if quelle | filter > "$OUT.tmp"; then
   mv "$OUT.tmp" "$OUT"
   echo "Gespeichert: $OUT" >&2

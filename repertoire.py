@@ -5,12 +5,13 @@ Eröffnungsrepertoire als PGN, für Weiß oder Schwarz.
 Aufruf:   python3 repertoire.py konfiguration.json
 Benötigt: pip install chess   und Stockfish (z. B. brew install stockfish)
 
-Ablauf: Partien laden, nach Startzügen und Systemregel filtern, Zugbaum nach
-Stellung zählen, Kapitel bilden, Linienenden mit Stockfish bewerten,
-Musterpartien suchen, PGN schreiben. Stockfish Ergebnisse werden in einer
-Cache Datei neben der Ausgabe gespeichert, ein Abbruch kostet daher nichts.
+Ausgaben:
+  <ausgabe>.pgn               Repertoire mit Hauptteil, Bauernstrukturen, Anhang, Zusammenfassung
+  <ausgabe>_quickstart.pgn    die wahrscheinlichsten Linien zum schnellen Üben
+  <ausgabe>_strukturen.json   Strukturen mit Zahlen, Grundlage für eigene Erklärungstexte
+  <ausgabe>_stockfish.json    Zwischenspeicher der Engine, ein zweiter Lauf rechnet nur Neues
 """
-import sys, os, json, re, math, collections, datetime
+import sys, os, json, re, math, time, collections, datetime
 from multiprocessing import Pool
 import chess, chess.pgn, chess.engine
 
@@ -18,59 +19,88 @@ STANDARD = {
     "farbe": "weiss", "erste_antworten": 10, "antworten": 3, "fruehe_zuege_ab_5_prozent": [2, 3],
     "min_partien": 20, "bis_zug": 15, "hv_tiefe": 4, "kapitel_max": 800, "kapitel_teilen_ab": 300,
     "zusammenfassung_bis_zug": 5, "system": [], "ohne_systemfilter": [], "repertoire_pgn": None,
-    "repertoire_kommentare": True, "kommentare_entfernen": [], "anhang_pgn": [], "statistik": False,
+    "repertoire_kommentare": True, "repertoire_zuege": "alle", "kommentare_entfernen": [], "anhang_pgn": [], "statistik": False,
     "stockfish": "stockfish", "tiefe": 18, "prozesse": 2, "eco": "?", "notation": "de",
+    "quickstart_linien": 15, "quickstart_bis_zug": 14,
+    "fehler": True, "fehler_tiefe": 14, "fehler_grenze": 0.2, "fehler_min_anteil": 5,
+    "fehler_min_partien": 10, "fehler_anzahl": 5,
+    "strukturen_zug": 12, "strukturen_anzahl": 5, "strukturen_text": None,
 }
 
 # ---------------------------------------------------------------- Hilfen
 def lade_config(pfad):
     cfg = dict(STANDARD); cfg.update(json.load(open(pfad, encoding="utf-8")))
     basis = os.path.dirname(os.path.abspath(pfad))
-    for k in ("daten", "ausgabe", "repertoire_pgn"):
+    for k in ("daten", "ausgabe", "repertoire_pgn", "strukturen_text"):
         if cfg.get(k) and not os.path.isabs(cfg[k]): cfg[k] = os.path.join(basis, cfg[k])
     cfg["anhang_pgn"] = [p if os.path.isabs(p) else os.path.join(basis, p) for p in cfg["anhang_pgn"]]
     cfg["ich"] = chess.WHITE if cfg["farbe"].lower().startswith("w") else chess.BLACK
     cfg["start_san"] = [t for t in re.sub(r"\d+\.(\.\.)?", " ", cfg["start"]).split() if t]
+    cfg["basis"] = os.path.splitext(cfg["ausgabe"])[0]
     return cfg
 
 def epd(b): return b.epd()
 def key(fen): return " ".join(fen.split()[:4])
-
-def de(s, cfg):
-    return s.translate(str.maketrans("NBRQK", "SLTDK")) if cfg["notation"] == "de" else s
+def de(s, cfg): return s.translate(str.maketrans("NBRQ", "SLTD")) if cfg["notation"] == "de" else s
+def zahl(x, st=1): return f"{x:.{st}f}".replace(".", ",")
+def ev(cp): return ("+" if cp > 0 else "") + zahl(cp / 100, 2)
+def wc(cp): return 2 / (1 + math.exp(-0.00368208 * max(-10000, min(10000, cp)))) - 1
+def seite(farbe): return "Weiß" if farbe == chess.WHITE else "Schwarz"
 
 def label(b, san, cfg):
     return f"{b.fullmove_number}.{de(san, cfg)}" if b.turn == chess.WHITE else f"{b.fullmove_number}...{de(san, cfg)}"
 
-def pfad_text(pfad, cfg):
-    b = chess.Board(); ms = []
-    for m in pfad: mv = b.parse_san(m); ms.append(mv); b.push(mv)
-    return de(chess.Board().variation_san(ms), cfg)
+def zugfolge(pfad, cfg, ab=0):
+    """Züge eines Pfads als Text, ab einem Halbzug, mit richtigen Zugnummern."""
+    b = chess.Board()
+    for m in pfad[:ab]: b.push_san(m)
+    ms = []
+    for m in pfad[ab:]: mv = b.parse_san(m); ms.append(mv); b.push(mv)
+    b0 = chess.Board()
+    for m in pfad[:ab]: b0.push_san(m)
+    return de(b0.variation_san(ms), cfg) if ms else ""
 
-def winkel(cp):
-    e = cp / 100
-    if abs(e) < 0.3: return 11
-    if e >= 1.5: return 18
-    if e >= 0.7: return 16
-    if e > 0: return 14
-    if e <= -1.5: return 19
-    if e <= -0.7: return 17
-    return 15
+def dauer(sek):
+    sek = int(sek)
+    return f"{sek // 3600} Std. {sek % 3600 // 60} Min." if sek >= 3600 else (f"{sek // 60} Min." if sek >= 60 else f"{sek} Sek.")
+
+class Fortschritt:
+    """Balken mit Prozent, Anzahl und geschätzter Restzeit."""
+    def __init__(self, name, gesamt):
+        self.name, self.gesamt, self.t0, self.n, self.zuletzt = name, max(gesamt, 1), time.time(), 0, 0.0
+        self.zeige(True)
+    def schritt(self, k=1):
+        self.n += k; self.zeige(False)
+    def zeige(self, sofort):
+        jetzt = time.time()
+        if not sofort and jetzt - self.zuletzt < 0.5: return
+        self.zuletzt = jetzt; a = min(self.n / self.gesamt, 1.0); voll = int(a * 20)
+        rest = f"noch ca. {dauer((jetzt - self.t0) / a * (1 - a))}" if a > 0.01 else "Restzeit wird geschätzt"
+        sys.stderr.write(f"\r  {self.name:<13} [{'█' * voll}{'░' * (20 - voll)}] {zahl(a * 100):>5} %  {self.n}/{self.gesamt}  {rest}      ")
+        sys.stderr.flush()
+    def fertig(self):
+        sys.stderr.write(f"\r  {self.name:<13} [{'█' * 20}] 100,0 %  fertig in {dauer(time.time() - self.t0)}{' ' * 30}\n")
+        sys.stderr.flush()
 
 # ---------------------------------------------------------------- Daten
 def lade_partien(cfg):
     start = cfg["start_san"]; L = len(start); maxp = cfg["bis_zug"] * 2
     ich = cfg["ich"]; regeln = cfg["system"]; ohne = set(cfg["ohne_systemfilter"])
+    S = cfg["strukturen_zug"] * 2
     zaehler = collections.defaultdict(collections.Counter)
-    alle = []; n_sys = 0; n_ges = 0
+    punkte = collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0.0]))
+    erreicht = collections.Counter()
+    strukturen = []
+    alle = []; n_sys = n_ges = n_pool = 0
+    zeilen = sum(1 for _ in open(cfg["daten"], encoding="utf-8"))
+    fs = Fortschritt("Partien laden", zeilen)
     for zeile in open(cfg["daten"], encoding="utf-8"):
+        fs.schritt()
         f = zeile.rstrip("\n").split("\t")
         if len(f) < 12 or f[5] not in ("1-0", "0-1", "1/2-1/2"): continue
         zuege = [t.rstrip("?!") for t in f[11].split()]
         if zuege[:L] != start: continue
-        n_ges += 1
-        alle.append(f)
-        # Systemregel: jeder Eintrag muss erfüllt sein
+        n_ges += 1; alle.append(f)
         ok = True
         for r in regeln:
             treffer = False
@@ -84,15 +114,49 @@ def lade_partien(cfg):
             ok = ok and treffer
         erste = next((zuege[i] for i in range(L, len(zuege)) if (i % 2 == 0) != (ich == chess.WHITE)), None)
         if not ok and erste not in ohne: continue
-        if ok: n_sys += 1
-        b = chess.Board()
-        for p, z in enumerate(zuege[:maxp]):
+        n_sys += ok; n_pool += 1
+        pkt = {"1-0": 1.0, "0-1": 0.0, "1/2-1/2": 0.5}[f[5]]
+        if ich == chess.BLACK: pkt = 1 - pkt
+        b = chess.Board(); struktur = None; hebel = set()
+        for p, z in enumerate(zuege[:max(maxp, S + 6)]):
+            k = epd(b) if L <= p <= maxp else None
+            if k: erreicht[(p, k)] += 1
+            if p == S: struktur = strukturdaten(b, ich)
             try: mv = b.parse_san(z)
             except ValueError: break
-            if p >= L: zaehler[(p, epd(b))][b.san(mv)] += 1
+            if k and p < maxp:
+                s = z; zaehler[(p, k)][s] += 1   # Lichess schreibt Standard SAN
+                x = punkte[(p, k)][s]; x[0] += 1; x[1] += pkt
+            if struktur and S <= p < S + 6 and b.piece_type_at(mv.from_square) == chess.PAWN:
+                if hebel_zug(b, mv): hebel.add(("W" if b.turn == chess.WHITE else "S") + ":" + b.san(mv))
             b.push(mv)
-    print(f"Partien mit Startzügen: {n_ges}, davon mit Systemregel: {n_sys}", flush=True)
-    return zaehler, alle, n_ges, n_sys
+        else:
+            p = len(zuege[:max(maxp, S + 6)])
+            if L <= p <= maxp: erreicht[(p, epd(b))] += 1
+            if p == S: struktur = strukturdaten(b, ich)
+        if struktur: strukturen.append((struktur, tuple(sorted(hebel)), pkt))
+    fs.fertig()
+    print(f"  Partien mit Startzügen: {n_ges}, davon mit Systemregel: {n_sys}, ausgewertet: {n_pool}", flush=True)
+    return {"zaehler": zaehler, "punkte": punkte, "erreicht": erreicht, "alle": alle, "strukturen": strukturen,
+            "n_ges": n_ges, "n_sys": n_sys, "n_pool": n_pool}
+
+def hebel_zug(b, mv):
+    """Bauernzug, der schlägt oder einen gegnerischen Bauern angreift."""
+    if b.is_capture(mv): return True
+    b2 = b.copy(); b2.push(mv)
+    return any(b2.piece_at(q) and b2.piece_at(q).piece_type == chess.PAWN and b2.piece_at(q).color != b.turn
+               for q in b2.attacks(mv.to_square))
+
+def strukturdaten(b, ich):
+    zent = lambda farbe: " ".join(chess.square_name(q) for q in sorted(b.pieces(chess.PAWN, farbe), key=lambda q: (chess.square_file(q), q))
+                                  if chess.square_file(q) in (2, 3, 4, 5))
+    w, s = zent(chess.WHITE), zent(chess.BLACK)
+    def roch(farbe):
+        k = b.king(farbe); f = chess.square_file(k) if k is not None else 4
+        return "kurz" if f >= 6 else ("lang" if f <= 2 else "keine")
+    figuren = tuple(sorted(f"{'S' if b.piece_type_at(q) == chess.KNIGHT else 'L'}{chess.square_name(q)}"
+                           for q in list(b.pieces(chess.KNIGHT, ich)) + list(b.pieces(chess.BISHOP, ich))))
+    return (f"{w} | {s}", epd(b), roch(chess.WHITE) + "/" + roch(chess.BLACK), figuren)
 
 def lade_repertoire(cfg):
     """Alle Stellungen aus der Repertoire PGN: Züge je Stellung, eigene Züge gelten als Repertoirezüge."""
@@ -111,47 +175,48 @@ def lade_repertoire(cfg):
         st = [g]
         while st:
             x = st.pop(); b = x.board(); k = epd(b)
-            for v in x.variations:
-                d = rep.setdefault(k, {}).setdefault(v.move.uci(), {"san": b.san(v.move), "c": ""})
+            for i, v in enumerate(x.variations):
+                d = rep.setdefault(k, {}).setdefault(v.move.uci(), {"san": b.san(v.move), "c": "", "rep": False})
+                if cfg["repertoire_zuege"] == "alle" or i == 0: d["rep"] = True
                 c = filt(v.comment)
                 if c and c not in d["c"]: d["c"] = (d["c"] + " " + c).strip()
                 st.append(v)
-    print(f"Repertoire PGN: {len(rep)} Stellungen", flush=True)
+    print(f"  Repertoire PGN: {len(rep)} Stellungen", flush=True)
     return rep
 
 # ---------------------------------------------------------------- Zugbaum
 class Baum:
-    def __init__(self, cfg, zaehler, rep):
-        self.cfg, self.z, self.rep = cfg, zaehler, rep
-        self.maxp = cfg["bis_zug"] * 2; self.seen = {}
+    def __init__(self, cfg, daten, rep):
+        self.cfg, self.z, self.rep = cfg, daten["zaehler"], rep
+        self.maxp = cfg["bis_zug"] * 2; self.seen = {}; self.knoten_von = {}
 
-    def knoten(self, b, san, art, **kw):
+    def knoten(self, b, san, art, pfad, **kw):
         mv = b.parse_san(san); b2 = b.copy(); b2.push(mv)
         r = self.rep.get(epd(b), {}).get(mv.uci())
         d = {"san": san, "uci": mv.uci(), "fb": b.fen(), "fa": b2.fen(), "art": art, "rep": False,
-             "c": r["c"] if r else "", "kids": [], "transpo": None}
+             "c": r["c"] if r else "", "kids": [], "transpo": None, "pfad": pfad + [san], "ply": len(pfad) + 1}
         d.update(kw); return d, b2
 
-    def nur_rep(self, b, ply, lokal):
+    def nur_rep(self, b, pfad, lokal):
         out = []
-        if ply >= self.maxp + 6: return out
+        if len(pfad) >= self.maxp + 6: return out
         for u, r in self.rep.get(epd(b), {}).items():
             mv = chess.Move.from_uci(u); b2 = b.copy(); b2.push(mv)
             if epd(b2) in lokal: continue
-            d, _ = self.knoten(b, r["san"], "rep")
-            d["kids"] = self.nur_rep(b2, ply + 1, lokal | {epd(b2)})
+            d, _ = self.knoten(b, r["san"], "rep", pfad)
+            d["kids"] = self.nur_rep(b2, pfad + [r["san"]], lokal | {epd(b2)})
             out.append(d)
         return out
 
-    def daten(self, b, ply, pfad, erste_ply):
-        cfg = self.cfg; k = epd(b)
+    def daten(self, b, pfad, erste_ply):
+        cfg = self.cfg; k = epd(b); ply = len(pfad)
         c = self.z.get((ply, k)); tot = sum(c.values()) if c else 0
         repz = self.rep.get(k, {})
         picks = []
         if ply < self.maxp and tot >= cfg["min_partien"]:
             rang = c.most_common()
             if b.turn == cfg["ich"]:
-                eigene = [r["san"] for r in repz.values()]
+                eigene = [r["san"] for r in repz.values() if r["rep"]]
                 picks = [rang[0][0]] + [s for s in eigene if s != rang[0][0] and c.get(s, 0) > 0]
             elif ply == erste_ply:
                 ohne = set(cfg["ohne_systemfilter"])
@@ -163,21 +228,20 @@ class Baum:
                 picks = [m for m, _ in rang[:cfg["antworten"]]]
         out = []
         for i, m in enumerate(picks):
-            d, b2 = self.knoten(b, m, "daten", cnt=c[m], anteil=round(100 * c[m] / tot, 1),
+            d, b2 = self.knoten(b, m, "daten", pfad, cnt=c[m], anteil=round(100 * c[m] / tot, 1),
                                 rep=(b.turn == cfg["ich"] and i > 0))
-            d2 = self.z.get((ply + 1, epd(b2))); d["n"] = sum(d2.values()) if d2 else c[m]
             if epd(b2) in self.seen: d["transpo"] = self.seen[epd(b2)]
             else:
-                self.seen[epd(b2)] = pfad + [m]
-                d["kids"] = self.daten(b2, ply + 1, pfad + [m], erste_ply)
+                self.seen[epd(b2)] = pfad + [m]; self.knoten_von[epd(b2)] = d
+                d["kids"] = self.daten(b2, pfad + [m], erste_ply)
             out.append(d)
         if ply < self.maxp:
             for u, r in repz.items():
                 if r["san"] in picks: continue
                 mv = chess.Move.from_uci(u); b2 = b.copy(); b2.push(mv)
-                d, _ = self.knoten(b, r["san"], "rep", rep=(b.turn == cfg["ich"] and bool(picks)))
+                d, _ = self.knoten(b, r["san"], "rep", pfad, rep=(b.turn == cfg["ich"] and bool(picks) and r["rep"]))
                 if epd(b2) in self.seen: d["transpo"] = self.seen[epd(b2)]
-                else: d["kids"] = self.nur_rep(b2, ply + 1, {epd(b), epd(b2)})
+                else: d["kids"] = self.nur_rep(b2, pfad + [r["san"]], {epd(b), epd(b2)})
                 out.append(d)
         return out
 
@@ -186,8 +250,7 @@ def groesse(d): return 1 + sum(groesse(k) for k in d["kids"])
 # ---------------------------------------------------------------- Kapitel
 def kapitel_bilden(cfg, wurzel_kids):
     start = cfg["start_san"]; ich = cfg["ich"]
-    hv = []   # (pfad_davor, kids, brett)
-    kids = wurzel_kids; pfad = list(start); b = chess.Board()
+    hv = []; kids = wurzel_kids; pfad = list(start); b = chess.Board()
     for m in start: b.push_san(m)
     while kids:
         hv.append((list(pfad), kids, b.copy()))
@@ -210,18 +273,17 @@ def kapitel_bilden(cfg, wurzel_kids):
         rest = [k for k in ks[1:] if k["art"] != "daten"]
         if not neben and not rest: continue
         teil += 1
-        for k in neben:
-            kap += teilen(cfg, p, k, bb, teil)
+        for k in neben: kap += teilen(cfg, p, k, bb, teil)
         if rest:
-            wer = "eigene" if bb.turn == ich else ""
-            kap.append({"teil": teil, "name": f"Diverse {wer} {bb.fullmove_number}. Züge".replace("  ", " "), "pfad": p, "eintraege": rest})
+            wer = "eigene " if bb.turn == ich else ""
+            kap.append({"teil": teil, "name": f"Diverse {wer}{bb.fullmove_number}. Züge", "pfad": p, "eintraege": rest})
     return kap
 
 def teilen(cfg, p, k, bb, teil):
     name = label(bb, k["san"], cfg)
     if groesse(k) <= cfg["kapitel_max"] or not k["kids"] or k["kids"][0]["art"] != "daten":
         return [{"teil": teil, "name": name, "pfad": p, "eintraege": [k]}]
-    w = k["kids"][0]; b2 = bb.copy(); b2.push_san(k["san"]); b3 = b2.copy(); b3.push_san(w["san"])
+    w = k["kids"][0]; b2 = bb.copy(); b2.push_san(k["san"])
     gross = [c for c in w["kids"] if groesse(c) > cfg["kapitel_teilen_ab"] and c["art"] == "daten"]
     if not gross: return [{"teil": teil, "name": name, "pfad": p, "eintraege": [k]}]
     wp = p + [k["san"], w["san"]]; out = []
@@ -233,36 +295,169 @@ def teilen(cfg, p, k, bb, teil):
         out.append({"teil": teil, "name": f"{name} weitere {b2.fullmove_number}. Züge", "pfad": p + [k["san"]], "eintraege": k["kids"][1:]})
     return out
 
+def gesamtanteil(c, daten):
+    n = sum(daten["erreicht"].get((e["ply"], key(e["fa"])), 0) for e in c["eintraege"] if e["art"] == "daten")
+    return 100 * n / daten["n_pool"] if daten["n_pool"] else 0
+
+# ---------------------------------------------------------------- Quickstart
+def quickstart_linien(cfg, wurzel, baum):
+    """Die wahrscheinlichsten Linien: zuerst die Hauptlinie, dann jeweils die wahrscheinlichste
+    Abweichung des Gegners, jede Linie läuft danach mit dem häufigsten Zug weiter."""
+    import heapq
+    ich = cfg["ich"]; ende = cfg["quickstart_bis_zug"] * 2
+    def weiter(k):
+        if k["transpo"]:
+            n = baum.knoten_von.get(key(k["fa"])); return n["kids"] if n else []
+        return k["kids"]
+    def lauf(kids, pfad, p, kandidaten):
+        while True:
+            daten = [k for k in kids if k["art"] == "daten"]
+            if not daten or len(pfad) >= ende: return pfad
+            b = chess.Board()
+            for m in pfad: b.push_san(m)
+            if b.turn == ich:
+                reps = baum.rep.get(epd(b), {})
+                eigen = [k for k in daten if k["rep"]]
+                k = daten[0] if (not reps or reps.get(daten[0]["uci"], {}).get("rep") or not eigen) else eigen[0]
+            else:
+                for alt in daten[1:]:
+                    heapq.heappush(kandidaten, (-p * alt["anteil"] / 100, len(kandidaten), weiter(alt), pfad + [alt["san"]]))
+                k = daten[0]; p = p * k["anteil"] / 100
+            kids = weiter(k); pfad = pfad + [k["san"]]
+    kandidaten = []; out = []
+    out.append((1.0, lauf(wurzel, list(cfg["start_san"]), 1.0, kandidaten)))
+    while kandidaten and len(out) < cfg["quickstart_linien"]:
+        np_, _, kids, pfad = heapq.heappop(kandidaten)
+        out.append((-np_, lauf(kids, pfad, -np_, kandidaten)))
+    return out
+
+# ---------------------------------------------------------------- Fehler des Gegners
+def fehler_kandidaten(cfg, kapitel, daten):
+    """Je Kapitel die Stellungen, in denen der Gegner zieht, mit den häufigen Zügen."""
+    ich = cfg["ich"]; maxp = cfg["bis_zug"] * 2; je_kap = []
+    for c in kapitel:
+        st = []
+        def geh(d):
+            if d["art"] != "daten" or d["transpo"]: return
+            b = chess.Board(d["fa"])
+            if b.turn != ich and d["ply"] < maxp:
+                z = daten["zaehler"].get((d["ply"], key(d["fa"])))
+                tot = sum(z.values()) if z else 0
+                if tot >= cfg["min_partien"]:
+                    kand = [(m, n) for m, n in z.items()
+                            if n >= cfg["fehler_min_partien"] and 100 * n / tot >= cfg["fehler_min_anteil"]]
+                    if kand: st.append((d, tot, kand))
+            for k in d["kids"]: geh(k)
+        for e in c["eintraege"]: geh(e)
+        je_kap.append(st)
+    return je_kap
+
+def fehler_auswerten(cfg, kapitel, kandidaten, sf, daten):
+    ich = cfg["ich"]; gegner = not ich; liste = []; karte = {}
+    for c, st in zip(kapitel, kandidaten):
+        funde = []
+        for d, tot, kand in st:
+            b = chess.Board(d["fa"]); ucis = sorted(b.parse_san(m).uci() for m, _ in kand)
+            r = sf.get(f"F|{key(d['fa'])}|{','.join(ucis)}")
+            if not r: continue
+            vz = 1 if gegner == chess.WHITE else -1
+            pz = daten["punkte"].get((d["ply"], key(d["fa"])), {})
+            for m, n in kand:
+                u = b.parse_san(m).uci(); x = r["kand"].get(u)
+                if not x: continue
+                verlust = wc(vz * r["s"]) - wc(vz * x["s"])
+                if verlust < cfg["fehler_grenze"]: continue
+                p = pz.get(m, [0, 0]); rest_n = sum(v[0] for s, v in pz.items() if s != m)
+                rest_p = sum(v[1] for s, v in pz.items() if s != m)
+                funde.append({"pfad": d["pfad"], "san": m, "uci": u, "n": n, "fb": d["fa"], "vorher": r["s"],
+                              "nachher": x["s"], "pv": x["pv"], "nag": 4 if verlust >= 0.3 else 2,
+                              "quote": 100 * p[1] / p[0] if p[0] else None,
+                              "quote_rest": 100 * rest_p / rest_n if rest_n else None})
+        funde.sort(key=lambda f: -f["n"])
+        for f in funde: karte[(key(f["fb"]), f["uci"])] = f
+        liste.append(funde[:cfg["fehler_anzahl"]])
+    return liste, karte
+
+# ---------------------------------------------------------------- Bauernstrukturen
+def strukturen_auswerten(cfg, daten):
+    rec = daten["strukturen"]
+    if not rec: return []
+    zaehl = collections.Counter(s[0] for s, _, _ in rec)
+    out = []
+    for k, n in zaehl.most_common(cfg["strukturen_anzahl"]):
+        teil = [(s, h, p) for s, h, p in rec if s[0] == k]
+        bsp = collections.Counter(s[1] for s, _, _ in teil).most_common(1)[0][0]
+        roch = collections.Counter(s[2] for s, _, _ in teil).most_common(3)
+        fig = collections.Counter(f for s, _, _ in teil for f in s[3]).most_common(6)
+        heb = collections.Counter(x for _, h, _ in teil for x in h)
+        heb_p = collections.defaultdict(float)
+        for _, h, p in teil:
+            for x in h: heb_p[x] += p
+        out.append({"id": k, "n": n, "anteil": 100 * n / len(rec), "quote": 100 * sum(p for _, _, p in teil) / n,
+                    "beispiel": bsp, "rochade": [(r, 100 * m / n) for r, m in roch],
+                    "figuren": [(f, 100 * m / n) for f, m in fig],
+                    "hebel": [(x, 100 * m / n, 100 * heb_p[x] / m) for x, m in heb.most_common(5)]})
+    return out
+
+def zentrum(sid):
+    w, s = sid.split(" | ")
+    return f"Weiß {w or 'ohne'}, Schwarz {s or 'ohne'}"
+
 # ---------------------------------------------------------------- Stockfish
 _eng = None
 def _init(pfad):
     global _eng
     _eng = chess.engine.SimpleEngine.popen_uci(pfad); _eng.configure({"Threads": 1, "Hash": 64})
-def _bewerte(args):
-    fen, tiefe = args; b = chess.Board(fen)
-    if b.is_game_over():
-        o = b.outcome(); return fen, {"s": 0 if o.winner is None else (10000 if o.winner else -10000), "m": None}
-    info = _eng.analyse(b, chess.engine.Limit(depth=tiefe))
-    return fen, {"s": info["score"].white().score(mate_score=10000), "m": info["pv"][0].uci() if info.get("pv") else None}
 
-def stockfish(cfg, fens):
-    cache_pfad = os.path.splitext(cfg["ausgabe"])[0] + "_stockfish.json"
-    cache = json.load(open(cache_pfad)) if os.path.exists(cache_pfad) else {}
-    offen = sorted({f for f in fens if key(f) not in cache})
-    print(f"Stockfish: {len(fens)} Endstellungen, davon neu zu rechnen: {len(offen)}", flush=True)
+def _wert(info): return info["score"].white().score(mate_score=10000)
+
+def _aufgabe(a):
+    typ, schluessel = a[0], a[1]
+    if typ == "E":
+        b = chess.Board(a[2])
+        if b.is_game_over():
+            o = b.outcome(); return schluessel, {"s": 0 if o.winner is None else (10000 if o.winner else -10000), "m": None}
+        i = _eng.analyse(b, chess.engine.Limit(depth=a[3]))
+        return schluessel, {"s": _wert(i), "m": i["pv"][0].uci() if i.get("pv") else None}
+    if typ == "F":
+        b = chess.Board(a[2]); lim = chess.engine.Limit(depth=a[4])
+        best = _eng.analyse(b, lim)
+        zuege = [chess.Move.from_uci(u) for u in a[3]]
+        infos = _eng.analyse(b, lim, multipv=len(zuege), root_moves=zuege)
+        if isinstance(infos, dict): infos = [infos]
+        kand = {}
+        for i in infos:
+            if i.get("pv"): kand[i["pv"][0].uci()] = {"s": _wert(i), "pv": [m.uci() for m in i["pv"][1:4]]}
+        return schluessel, {"s": max(_wert(best), max((k["s"] for k in kand.values()), default=-99999)) if b.turn == chess.WHITE
+                            else min(_wert(best), min((k["s"] for k in kand.values()), default=99999)), "kand": kand}
+    if typ == "L":
+        b = chess.Board(a[2]); zuege = []
+        while len(zuege) < a[3] and not b.is_game_over():
+            r = _eng.play(b, chess.engine.Limit(depth=a[4])); zuege.append(r.move.uci()); b.push(r.move)
+        if b.is_game_over(): return schluessel, {"zuege": zuege, "s": 0, "m": None}
+        i = _eng.analyse(b, chess.engine.Limit(depth=a[4]))
+        return schluessel, {"zuege": zuege, "s": _wert(i), "m": i["pv"][0].uci() if i.get("pv") else None}
+
+def stockfish(cfg, aufgaben):
+    pfad = cfg["basis"] + "_stockfish.json"
+    cache = json.load(open(pfad)) if os.path.exists(pfad) else {}
+    offen = [a for a in {a[1]: a for a in aufgaben}.values() if a[1] not in cache]
+    print(f"  Stockfish: {len(aufgaben)} Aufgaben, davon neu zu rechnen: {len(offen)}", flush=True)
     if offen:
+        fs = Fortschritt("Stockfish", len(offen)); t = time.time()
         with Pool(cfg["prozesse"], initializer=_init, initargs=(cfg["stockfish"],)) as pool:
-            for i, (f, r) in enumerate(pool.imap_unordered(_bewerte, [(f, cfg["tiefe"]) for f in offen], chunksize=4), 1):
-                cache[key(f)] = r
-                if i % 100 == 0:
-                    print(f"  {i} von {len(offen)}", flush=True); json.dump(cache, open(cache_pfad, "w"))
-        json.dump(cache, open(cache_pfad, "w"))
+            for s, r in pool.imap_unordered(_aufgabe, offen, chunksize=2):
+                cache[s] = r; fs.schritt()
+                if time.time() - t > 60: json.dump(cache, open(pfad, "w")); t = time.time()
+        json.dump(cache, open(pfad, "w")); fs.fertig()
     return cache
 
 # ---------------------------------------------------------------- Musterpartien
 def musterpartien(cfg, alle, ziele):
     best = {}; maxp = cfg["bis_zug"] * 2
+    fs = Fortschritt("Musterpartien", len(alle))
     for f in alle:
+        fs.schritt()
         try: schnitt = (int(f[3]) + int(f[4])) / 2
         except ValueError: continue
         b = chess.Board()
@@ -273,85 +468,113 @@ def musterpartien(cfg, alle, ziele):
             if k in ziele and (k not in best or schnitt > best[k][0]):
                 d = f[8]; ort = f[0].replace("https://", "")
                 best[k] = (schnitt, f"{f[5]} ({(int(f[9]) + 1) // 2}) {f[1]} ({f[3]}) gegen {f[2]} ({f[4]}), Lichess {d[5:7]}.{d[:4]}, {ort}")
-    print(f"Musterpartien: {len(best)} von {len(ziele)} Endstellungen", flush=True)
+    fs.fertig()
+    print(f"  Musterpartien: {len(best)} von {len(ziele)} Endstellungen", flush=True)
     return {k: v[1] for k, v in best.items()}
 
 # ---------------------------------------------------------------- PGN
+def winkel(cp):
+    e = cp / 100
+    if abs(e) < 0.3: return 11
+    if e >= 1.5: return 18
+    if e >= 0.7: return 16
+    if e > 0: return 14
+    if e <= -1.5: return 19
+    if e <= -0.7: return 17
+    return 15
+
+def pfeil(u):
+    m = chess.Move.from_uci(u)
+    return f"[%cal G{chess.square_name(m.from_square)}{chess.square_name(m.to_square)}]"
+
 def blaetter(d, out):
     if not d["kids"] and not d["transpo"]: out.add(d["fa"])
     for k in d["kids"]: blaetter(k, out)
 
-def schreiben(cfg, kapitel, intro_pfad, zusammenfassung, anhang, sf, muster, info):
+def neues_spiel(cfg, titel, fen=None):
     heute = datetime.date.today().strftime("%Y.%m.%d")
-    praefixe = []
-    for i, c in enumerate(kapitel, 2):
-        for e in c["eintraege"]: praefixe.append((c["pfad"] + [e["san"]], i))
-    def verweis(p):
-        best = None
-        for pre, i in praefixe:
-            if len(pre) <= len(p) and p[:len(pre)] == pre and (best is None or len(pre) > len(best[0])): best = (pre, i)
-        return (f"Zugumstellung, siehe Kapitel {best[1]:02d} nach {pfad_text(p, cfg)}." if best
-                else f"Zugumstellung zur Stellung nach {pfad_text(p, cfg)}.")
-    def ende(node, fen, mit_partie=True):
-        teile = []; r = sf.get(key(fen))
-        if r and r["s"] is not None:
-            node.nags.add(winkel(r["s"]))
-            if r["m"]:
-                m = chess.Move.from_uci(r["m"])
-                teile.append(f"[%cal G{chess.square_name(m.from_square)}{chess.square_name(m.to_square)}]")
-        if mit_partie and key(fen) in muster: teile.append(muster[key(fen)])
-        return teile
-    def add(gn, d, mit_partie=True):
-        ch = gn.add_variation(chess.Move.from_uci(d["uci"])); teile = []
-        if d.get("rep"): teile.append("Repertoirezug")
-        if cfg["statistik"] and d["art"] == "daten":
-            teile.append(f"{str(d['anteil']).replace('.', ',')} %, {d['cnt']} Partien")
-        if d["c"]: teile.append(d["c"])
-        if d["transpo"]: teile.append(verweis(d["transpo"]))
-        elif not d["kids"]: teile += ende(ch, d["fa"], mit_partie)
-        ch.comment = " ".join(teile)
-        for k in d["kids"]: add(ch, k, mit_partie)
-    def spiel(titel):
-        g = chess.pgn.Game(); g.headers.clear()
-        for k, v in (("Event", "?"), ("Site", "?"), ("Date", heute), ("Round", "?"), ("White", titel), ("Black", "?"),
-                     ("Result", "*"), ("ECO", cfg["eco"]), ("Annotator", "repertoire.py (Lichess, Stockfish)"),
-                     ("PlyCount", "0"), ("SourceTitle", cfg["titel"]), ("SourceVersionDate", heute)):
-            g.headers[k] = v
-        return g
-    def zuege(g, pfad):
-        b = chess.Board(); n = g
-        for m in pfad: mv = b.parse_san(m); b.push(mv); n = n.add_variation(mv)
-        return n, b
-    spiele = []
-    # Intro
-    g = spiel("01 Intro"); g.comment = info
-    n, b = zuege(g, intro_pfad); n.comment = " ".join(ende(n, b.fen()))
-    spiele.append(g)
-    for i, c in enumerate(kapitel, 2):
-        g = spiel(f"Teil {c['teil']}: {i:02d} {c['name']}")
-        n, _ = zuege(g, c["pfad"])
-        for e in c["eintraege"]: add(n, e)
-        spiele.append(g)
-    nr = len(kapitel) + 2; teil = (kapitel[-1]["teil"] + 1) if kapitel else 1
-    for titel, g0 in anhang:
-        g = spiel(f"Teil {teil}: {nr:02d} {titel}"); g.comment = g0.comment
-        def kopie(src, dst):
-            for v in src.variations:
-                x = dst.add_variation(v.move); x.comment = v.comment; x.nags = set(v.nags); kopie(v, x)
-        kopie(g0, g); spiele.append(g); nr += 1
-    g = spiel(f"{nr:02d} Zusammenfassung")
-    n, _ = zuege(g, cfg["start_san"])
-    for e in zusammenfassung: add(n, e, mit_partie=False)
-    spiele.append(g)
-    with open(cfg["ausgabe"], "w", encoding="utf-8", newline="\r\n") as f:
+    g = chess.pgn.Game(); g.headers.clear()
+    for k, v in (("Event", "?"), ("Site", "?"), ("Date", heute), ("Round", "?"), ("White", titel), ("Black", "?"),
+                 ("Result", "*"), ("ECO", cfg["eco"]), ("Annotator", "repertoire.py (Lichess, Stockfish)"),
+                 ("PlyCount", "0"), ("SourceTitle", cfg["titel"]), ("SourceVersionDate", heute)):
+        g.headers[k] = v
+    if fen: g.setup(chess.Board(fen))
+    return g
+
+def speichern(pfad, spiele):
+    with open(pfad, "w", encoding="utf-8", newline="\r\n") as f:
         for g in spiele:
             g.headers["PlyCount"] = str(len(list(g.mainline_moves())))
             print(g, file=f, end="\n\n")
-    print(f"Geschrieben: {cfg['ausgabe']} ({len(spiele)} Kapitel)", flush=True)
+
+class Schreiber:
+    def __init__(self, cfg, kapitel, sf, muster, fehler_karte):
+        self.cfg, self.sf, self.muster, self.fk = cfg, sf, muster, fehler_karte
+        self.praefixe = [(c["pfad"] + [e["san"]], i) for i, c in enumerate(kapitel, 2) for e in c["eintraege"]]
+        self.neben = collections.defaultdict(list)
+        for f in fehler_karte.values(): self.neben[key(f["fb"])].append(f)
+
+    def verweis(self, p):
+        best = None
+        for pre, i in self.praefixe:
+            if len(pre) <= len(p) and p[:len(pre)] == pre and (best is None or len(pre) > len(best[0])): best = (pre, i)
+        txt = zugfolge(p, self.cfg)
+        return f"Zugumstellung, siehe Kapitel {best[1]:02d} nach {txt}." if best else f"Zugumstellung zur Stellung nach {txt}."
+
+    def ende(self, node, fen, mit_partie=True):
+        teile = []; r = self.sf.get("E|" + key(fen))
+        if r and r["s"] is not None:
+            node.nags.add(winkel(r["s"]))
+            if r["m"]: teile.append(pfeil(r["m"]))
+        if mit_partie and key(fen) in self.muster: teile.append(self.muster[key(fen)])
+        return teile
+
+    def fehler_text(self, f):
+        t = f"Fehler: Stockfish {ev(f['vorher'])} auf {ev(f['nachher'])}."
+        if f["quote"] is not None and f["quote_rest"] is not None:
+            t += (f" {seite(self.cfg['ich'])} punktet {zahl(f['quote'], 0)} % nach diesem Zug, "
+                  f"{zahl(f['quote_rest'], 0)} % nach den übrigen Zügen.")
+        return t
+
+    def widerlegung(self, node, fen, pv):
+        b = chess.Board(fen); n = node
+        for i, u in enumerate(pv):
+            mv = chess.Move.from_uci(u)
+            if mv not in b.legal_moves: break
+            n = n.add_variation(mv); b.push(mv)
+            if i == 0: n.comment = "Widerlegung laut Stockfish"
+
+    def neben_fehler(self, node, fen, vorhanden):
+        for f in self.neben.get(key(fen), []):
+            if f["uci"] in vorhanden: continue
+            ch = node.add_variation(chess.Move.from_uci(f["uci"])); ch.nags.add(f["nag"])
+            ch.comment = self.fehler_text(f)
+            b = chess.Board(fen); b.push(chess.Move.from_uci(f["uci"]))
+            self.widerlegung(ch, b.fen(), f["pv"])
+
+    def add(self, gn, d, mit_partie=True, fehler=True):
+        ch = gn.add_variation(chess.Move.from_uci(d["uci"])); teile = []
+        f = self.fk.get((key(d["fb"]), d["uci"])) if fehler else None
+        if f: ch.nags.add(f["nag"]); teile.append(self.fehler_text(f))
+        if d.get("rep"): teile.append("Repertoirezug")
+        if self.cfg["statistik"] and d["art"] == "daten": teile.append(f"{zahl(d['anteil'])} %, {d['cnt']} Partien")
+        if d["c"]: teile.append(d["c"])
+        if d["transpo"]: teile.append(self.verweis(d["transpo"]))
+        elif not d["kids"]:
+            teile += self.ende(ch, d["fa"], mit_partie)
+            if f: self.widerlegung(ch, d["fa"], f["pv"])
+        ch.comment = " ".join(teile)
+        for k in d["kids"]: self.add(ch, k, mit_partie, fehler)
+        if fehler and not d["transpo"]: self.neben_fehler(ch, d["fa"], {k["uci"] for k in d["kids"]})
+        return ch
+
+def zuege_setzen(g, pfad):
+    b = chess.Board(); n = g
+    for m in pfad: mv = b.parse_san(m); b.push(mv); n = n.add_variation(mv)
+    return n, b
 
 def kurz(d, ply, bis):
-    """Kopie des Datenbaums bis zu einem Halbzug, ohne reine Repertoirelinien, für die Zusammenfassung."""
-    e = dict(d); e["c"] = ""
+    e = dict(d); e["c"] = ""; e["rep"] = d["rep"]
     e["kids"] = [kurz(k, ply + 1, bis) for k in d["kids"] if k["art"] == "daten"] if ply + 1 < bis else []
     if ply + 1 >= bis: e["transpo"] = None
     return e
@@ -359,28 +582,27 @@ def kurz(d, ply, bis):
 # ---------------------------------------------------------------- Hauptprogramm
 def main():
     if len(sys.argv) < 2: print(__doc__); sys.exit(1)
-    cfg = lade_config(sys.argv[1])
-    zaehler, alle, n_ges, n_sys = lade_partien(cfg)
+    t0 = time.time(); cfg = lade_config(sys.argv[1]); ich = cfg["ich"]
+    print("1/6 Daten", flush=True)
+    daten = lade_partien(cfg)
     rep = lade_repertoire(cfg)
+    print("2/6 Zugbaum und Kapitel", flush=True)
     b = chess.Board()
     for m in cfg["start_san"]: b.push_san(m)
-    L = len(cfg["start_san"]); erste = L if b.turn != cfg["ich"] else L + 1
-    baum = Baum(cfg, zaehler, rep); baum.seen[epd(b)] = list(cfg["start_san"])
-    wurzel = baum.daten(b, L, list(cfg["start_san"]), erste)
+    L = len(cfg["start_san"]); erste = L if b.turn != ich else L + 1
+    baum = Baum(cfg, daten, rep); baum.seen[epd(b)] = list(cfg["start_san"])
+    wurzel = baum.daten(b, list(cfg["start_san"]), erste)
     kapitel = kapitel_bilden(cfg, wurzel)
-    # Intro Linie: Hauptvariante bis zum Ende
     intro = list(cfg["start_san"]); kids = wurzel
     while kids and kids[0]["art"] == "daten" and not kids[0]["transpo"]:
         intro.append(kids[0]["san"]); kids = kids[0]["kids"]
-    bis = cfg["zusammenfassung_bis_zug"] * 2 - L
-    zus = [kurz(k, 0, bis) for k in wurzel if k["art"] == "daten"]
-    anhang = []
-    for p in cfg["anhang_pgn"]:
-        h = open(p, encoding="utf-8-sig")
-        while True:
-            g = chess.pgn.read_game(h)
-            if g is None: break
-            anhang.append((g.headers.get("White", "?") if g.headers.get("Black", "?") == "?" else g.headers.get("Black"), g))
+    zus = [kurz(k, 0, cfg["zusammenfassung_bis_zug"] * 2 - L) for k in wurzel if k["art"] == "daten"]
+    linien = quickstart_linien(cfg, wurzel, baum)
+    strukturen = strukturen_auswerten(cfg, daten)
+    kandidaten = fehler_kandidaten(cfg, kapitel, daten) if cfg["fehler"] else [[] for _ in kapitel]
+    print(f"  {len(kapitel)} Kapitel im Hauptteil, {len(linien)} Quickstart Linien, {len(strukturen)} Strukturen", flush=True)
+
+    print("3/6 Stockfish", flush=True)
     fens = set()
     for c in kapitel:
         for e in c["eintraege"]: blaetter(e, fens)
@@ -388,19 +610,113 @@ def main():
     bb = chess.Board()
     for m in intro: bb.push_san(m)
     fens.add(bb.fen())
-    sf = stockfish(cfg, fens)
-    muster = musterpartien(cfg, alle, {key(f) for f in fens})
-    seite = "Weiß" if cfg["ich"] == chess.WHITE else "Schwarz"
-    info = (f"{cfg['titel']}. Repertoire für {seite}, Startzüge {de(cfg['start'], cfg)}. "
-            f"Daten: {n_ges} Lichess Partien, davon {n_sys} mit der Systemregel. "
-            f"REGELN: Bei jedem Zug des Gegners die {cfg['antworten']} meistgespielten Antworten, in den Zügen "
-            f"{', '.join(map(str, cfg['fruehe_zuege_ab_5_prozent']))} zusätzlich jede ab 5 %. Bei {seite} ist der meistgespielte Zug Hauptvariante, "
+    aufgaben = [("E", "E|" + key(f), f, cfg["tiefe"]) for f in fens]
+    for st in kandidaten:
+        for d, tot, kand in st:
+            bx = chess.Board(d["fa"]); ucis = sorted(bx.parse_san(m).uci() for m, _ in kand)
+            aufgaben.append(("F", f"F|{key(d['fa'])}|{','.join(ucis)}", d["fa"], ucis, cfg["fehler_tiefe"]))
+    q_ende = cfg["quickstart_bis_zug"] * 2
+    for p, pfad in linien:
+        bx = chess.Board()
+        for m in pfad: bx.push_san(m)
+        aufgaben.append(("L", f"L|{key(bx.fen())}|{q_ende - len(pfad)}", bx.fen(), max(q_ende - len(pfad), 0), cfg["tiefe"]))
+    sf = stockfish(cfg, aufgaben)
+
+    print("4/6 Fehler des Gegners und Musterpartien", flush=True)
+    fehler_liste, fehler_karte = fehler_auswerten(cfg, kapitel, kandidaten, sf, daten) if cfg["fehler"] else ([[] for _ in kapitel], {})
+    print(f"  {len(fehler_karte)} häufige Fehler gefunden", flush=True)
+    muster = musterpartien(cfg, daten["alle"], {key(f) for f in fens})
+
+    print("5/6 Repertoire schreiben", flush=True)
+    w = Schreiber(cfg, kapitel, sf, muster, fehler_karte)
+    gegner = seite(not ich)
+    info = (f"{cfg['titel']}. Repertoire für {seite(ich)}, Startzüge {de(cfg['start'], cfg)}. "
+            f"Daten: {daten['n_ges']} Lichess Partien, davon {daten['n_pool']} ausgewertet. "
+            f"REGELN: Bei jedem Zug von {gegner} die {cfg['antworten']} meistgespielten Antworten, in den Zügen "
+            f"{', '.join(map(str, cfg['fruehe_zuege_ab_5_prozent']))} zusätzlich jede ab 5 %. Bei {seite(ich)} ist der meistgespielte Zug Hauptvariante, "
             f"der Repertoirezug steht markiert daneben. Eine Linie verzweigt, solange mindestens {cfg['min_partien']} Partien die Stellung erreichen, "
-            f"höchstens bis Zug {cfg['bis_zug']}. Zugumstellungen verweisen auf das Kapitel, in dem die Stellung zuerst vorkommt. "
+            f"höchstens bis Zug {cfg['bis_zug']}. Die Prozentzahl im Kapitelnamen ist der Anteil aller ausgewerteten Partien, die das Kapitel erreichen. "
+            f"Zugumstellungen verweisen auf das Kapitel, in dem die Stellung zuerst vorkommt. "
+            f"FEHLER: Am Ende jedes Kapitels stehen die häufigsten Fehler von {gegner}. Als Fehler zählt ein Zug, der laut Stockfish mindestens "
+            f"{zahl(cfg['fehler_grenze'])} Gewinnchancen kostet (Skala von minus 1 bis plus 1 wie bei Lichess, in ausgeglichenen Stellungen etwa ein Bauer). "
+            f"? Fehler, ?? grober Fehler, dazu die Widerlegung. "
             f"AM LINIENENDE: Bewertung von Stockfish (Tiefe {cfg['tiefe']}, aus Sicht von Weiß): = ausgeglichen, ⩲ oder ⩱ leichter Vorteil, "
             f"± oder ∓ klarer Vorteil, +- oder -+ entscheidender Vorteil. Grüner Pfeil = bester Zug. "
             f"Musterpartie = Lichess Partie mit dem höchsten Elo Schnitt, die die Stellung erreicht hat.")
-    schreiben(cfg, kapitel, intro, zus, anhang, sf, muster, info)
+    spiele = []
+    g = neues_spiel(cfg, "01 Intro"); g.comment = info
+    n, bb = zuege_setzen(g, intro); n.comment = " ".join(w.ende(n, bb.fen()))
+    spiele.append(g)
+    for i, (c, fl) in enumerate(zip(kapitel, fehler_liste), 2):
+        pz = gesamtanteil(c, daten)
+        anteil = f" ({zahl(pz)} % gesamt)" if pz >= 0.1 else (" (unter 0,1 % gesamt)" if pz > 0 else "")
+        g = neues_spiel(cfg, f"Teil {c['teil']}: {i:02d} {c['name']}{anteil}")
+        n, _ = zuege_setzen(g, c["pfad"])
+        for e in c["eintraege"]: w.add(n, e)
+        if fl:
+            teile = []
+            for j, f in enumerate(fl, 1):
+                b0 = chess.Board(f["fb"])
+                teile.append(f"{j}) {label(b0, f['san'], cfg)}{'??' if f['nag'] == 4 else '?'} in {f['n']} Partien, "
+                             f"nach {zugfolge(f['pfad'], cfg, len(c['pfad']))}. {w.fehler_text(f)}")
+            ende = g.end()
+            ende.comment = (ende.comment + " " if ende.comment else "") + f"HÄUFIGSTE FEHLER VON {gegner.upper()} IN DIESEM KAPITEL: " + " ".join(teile)
+        spiele.append(g)
+    nr = len(kapitel) + 2; teil = (kapitel[-1]["teil"] + 1) if kapitel else 1
+    texte = json.load(open(cfg["strukturen_text"], encoding="utf-8")) if cfg.get("strukturen_text") and os.path.exists(cfg["strukturen_text"]) else {}
+    for j, s in enumerate(strukturen, 1):
+        g = neues_spiel(cfg, f"Teil {teil}: {nr:02d} Struktur {j}: {zentrum(s['id'])}", fen=s["beispiel"] + f" 0 {cfg['strukturen_zug'] + 1}")
+        txt = (f"BAUERNSTRUKTUR im Zentrum (Linien c bis f) nach Zug {cfg['strukturen_zug']}: {zentrum(s['id'])}. Die Stellung zeigt die häufigste Partie mit dieser Struktur. "
+               f"Kommt in {zahl(s['anteil'])} % der Partien vor, die Zug {cfg['strukturen_zug']} erreichen ({s['n']} Partien), "
+               f"{seite(ich)} punktet {zahl(s['quote'], 0)} %. "
+               "Rochaden (Weiß/Schwarz): " + ", ".join(f"{r} {zahl(p, 0)} %" for r, p in s["rochade"]) + ". "
+               "Typische Felder deiner Leichtfiguren: " + ", ".join(f"{f} {zahl(p, 0)} %" for f, p in s["figuren"]) + ". ")
+        if s["hebel"]:
+            txt += "Häufigste Bauernhebel in den nächsten drei Zügen: " + ", ".join(
+                f"{'Weiß' if x[0] == 'W' else 'Schwarz'} {de(x[2:], cfg)} ({zahl(a, 0)} % der Partien, {seite(ich)} punktet danach {zahl(q, 0)} %)"
+                for x, a, q in s["hebel"]) + ". "
+        if s["id"] in texte: txt += "IDEEN: " + texte[s["id"]]
+        g.comment = txt; spiele.append(g); nr += 1
+    if strukturen: teil += 1
+    for p in cfg["anhang_pgn"]:
+        h = open(p, encoding="utf-8-sig")
+        while True:
+            g0 = chess.pgn.read_game(h)
+            if g0 is None: break
+            titel = g0.headers.get("White", "?") if g0.headers.get("Black", "?") == "?" else g0.headers.get("Black")
+            g = neues_spiel(cfg, f"Teil {teil}: {nr:02d} {titel}"); g.comment = g0.comment
+            def kopie(src, dst):
+                for v in src.variations:
+                    x = dst.add_variation(v.move); x.comment = v.comment; x.nags = set(v.nags); kopie(v, x)
+            kopie(g0, g); spiele.append(g); nr += 1
+    g = neues_spiel(cfg, f"{nr:02d} Zusammenfassung")
+    n, _ = zuege_setzen(g, cfg["start_san"])
+    for e in zus: w.add(n, e, mit_partie=False, fehler=False)
+    spiele.append(g)
+    speichern(cfg["ausgabe"], spiele)
+    print(f"  Geschrieben: {cfg['ausgabe']} ({len(spiele)} Kapitel)", flush=True)
+
+    print("6/6 Quickstart und Strukturdatei", flush=True)
+    q = []
+    for i, (p, pfad) in enumerate(linien, 1):
+        g = neues_spiel(cfg, f"{i:02d} {zugfolge(pfad[:8], cfg)}")
+        n, bx = zuege_setzen(g, pfad)
+        r = sf.get(f"L|{key(bx.fen())}|{q_ende - len(pfad)}")
+        if r:
+            for j, u in enumerate(r["zuege"]):
+                n = n.add_variation(chess.Move.from_uci(u))
+                if j == 0: n.comment = "Ab hier Empfehlung von Stockfish."
+            if r["s"] is not None:
+                n.nags.add(winkel(r["s"]))
+                if r["m"]: n.comment = (n.comment + " " + pfeil(r["m"])).strip()
+        q.append(g)
+    speichern(cfg["basis"] + "_quickstart.pgn", q)
+    json.dump([{"id": s["id"], "zentrum": zentrum(s["id"]), "beispiel_fen": s["beispiel"], "partien": s["n"],
+                "anteil_prozent": round(s["anteil"], 1), "quote_prozent": round(s["quote"], 1), "rochaden": s["rochade"],
+                "figuren": s["figuren"], "hebel": s["hebel"], "text": texte.get(s["id"], "")} for s in strukturen],
+              open(cfg["basis"] + "_strukturen.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    print(f"  Geschrieben: {cfg['basis']}_quickstart.pgn ({len(q)} Linien), {cfg['basis']}_strukturen.json", flush=True)
+    print(f"Fertig, Gesamtdauer {dauer(time.time() - t0)}", flush=True)
 
 if __name__ == "__main__":
     main()
