@@ -26,6 +26,7 @@ STANDARD = {
     "fehler_min_partien": 10, "fehler_anzahl": 5,
     "strukturen_zug": 12, "strukturen_anzahl": 5, "strukturen_text": None,
     "plan_zuege": 3, "plan_min_partien": 5,
+    "kapitel_min_anteil": 2, "kapitel_min_zug": 12, "verlaengern_min_partien": 5,
 }
 
 # ---------------------------------------------------------------- Hilfen
@@ -303,6 +304,79 @@ def gesamtanteil(c, daten):
     n = sum(daten["erreicht"].get((e["ply"], key(e["fa"])), 0) for e in c["eintraege"] if e["art"] == "daten")
     return 100 * n / daten["n_pool"] if daten["n_pool"] else 0
 
+def kapitel_ordnen(cfg, kapitel, daten):
+    """Sortiert nach Gesamtanteil, seltene Kapitel derselben Verzweigung werden zusammengelegt."""
+    for c in kapitel:
+        c["gruppen"] = [(c["pfad"], c["eintraege"])]
+        c["anteil"] = gesamtanteil(c, daten)
+        daten_e = [e for e in c["eintraege"] if e["art"] == "daten"]
+        if len(c["eintraege"]) == 1 and daten_e:
+            c["name"] = zugfolge(c["pfad"] + [daten_e[0]["san"]], cfg)
+        else:
+            c["name"] = f"{zugfolge(c['pfad'], cfg)}, weitere Züge"
+    gross = sorted([c for c in kapitel if c["anteil"] >= cfg["kapitel_min_anteil"]], key=lambda c: -c["anteil"])
+    klein = collections.defaultdict(list)
+    for c in kapitel:
+        if c["anteil"] < cfg["kapitel_min_anteil"]: klein[c["teil"]].append(c)
+    zusammen = []
+    for _, cs in klein.items():
+        if len(cs) == 1: zusammen.append(cs[0]); continue
+        gemeinsam = cs[0]["pfad"]
+        for c in cs[1:]:
+            n = 0
+            while n < min(len(gemeinsam), len(c["pfad"])) and gemeinsam[n] == c["pfad"][n]: n += 1
+            gemeinsam = gemeinsam[:n]
+        zusammen.append({"teil": cs[0]["teil"], "pfad": gemeinsam, "anteil": sum(c["anteil"] for c in cs),
+                         "gruppen": [g for c in cs for g in c["gruppen"]], "eintraege": [e for c in cs for e in c["eintraege"]],
+                         "name": f"Seltene Abweichungen nach {zugfolge(gemeinsam, cfg) or 'dem Start'} ({len(cs)} Linien)"})
+    zusammen.sort(key=lambda c: -c["anteil"])
+    return gross + zusammen
+
+def verlaengern(cfg, kapitel, daten, knoten_von):
+    """Hauptvariante jedes Eintrags mindestens bis kapitel_min_zug: erst meistgespielte Züge
+    (ab verlaengern_min_partien Partien), den Rest rechnet danach Stockfish."""
+    ziel = cfg["kapitel_min_zug"] * 2; offen = []
+    for c in kapitel:
+        for e in c["eintraege"]:
+            if e["transpo"]: continue
+            node = e
+            while node["kids"] and not node["kids"][0]["transpo"]:
+                node = node["kids"][0]
+            if node["kids"]:
+                # Hauptvariante endet in einer Zugumstellung: deren Fortsetzung übernehmen
+                node = node["kids"][0]; quelle = knoten_von.get(key(node["fa"])); erst = True
+                while quelle and node["ply"] < ziel:
+                    nxt = next((k for k in quelle["kids"] if k["art"] == "daten"), None)
+                    if not nxt: break
+                    d = {"san": nxt["san"], "uci": nxt["uci"], "fb": nxt["fb"], "fa": nxt["fa"], "art": "ext", "rep": False,
+                         "kids": [], "transpo": None, "pfad": node["pfad"] + [nxt["san"]], "ply": node["ply"] + 1,
+                         "c": "Fortsetzung der Hauptvariante dort:" if erst else ""}
+                    node["kids"].insert(0, d); node = d; erst = False
+                    quelle = knoten_von.get(key(nxt["fa"])) if nxt["transpo"] else nxt
+            ply = node["ply"]; b = chess.Board(node["fa"]); erst = True
+            while ply < ziel:
+                z = daten["zaehler"].get((ply, epd(b))); tot = sum(z.values()) if z else 0
+                if tot < cfg["verlaengern_min_partien"]: break
+                m = z.most_common(1)[0][0]; mv = b.parse_san(m); fb = b.fen(); b.push(mv)
+                d = {"san": m, "uci": mv.uci(), "fb": fb, "fa": b.fen(), "art": "ext", "rep": False, "kids": [], "transpo": None,
+                     "pfad": node["pfad"] + [m], "ply": ply + 1,
+                     "c": f"Ab hier weniger als {cfg['min_partien']} Partien, weiter mit dem meistgespielten Zug ({tot} Partien)." if erst else ""}
+                node["kids"].insert(0, d); node = d; ply += 1; erst = False
+            if ply < ziel: offen.append((node, b.fen(), ziel - ply))
+    return offen
+
+def stockfish_anhaengen(cfg, offen, sf):
+    for node, fen, n in offen:
+        r = sf.get(f"L{cfg['tiefe']}|{key(fen)}|{n}")
+        if not r: continue
+        b = chess.Board(fen)
+        for j, u in enumerate(r["zuege"]):
+            mv = chess.Move.from_uci(u); san = b.san(mv); fb = b.fen(); b.push(mv)
+            d = {"san": san, "uci": u, "fb": fb, "fa": b.fen(), "art": "ext", "rep": False, "kids": [], "transpo": None,
+                 "pfad": node["pfad"] + [san], "ply": node["ply"] + 1, "c": "Ab hier Empfehlung von Stockfish." if j == 0 else ""}
+            node["kids"].insert(0, d); node = d
+        sf[f"E{cfg['tiefe']}|" + key(b.fen())] = {"s": r["s"], "m": r["m"]}
+
 # ---------------------------------------------------------------- Quickstart
 def quickstart_linien(cfg, wurzel, baum):
     """Die wahrscheinlichsten Linien: zuerst die Hauptlinie, dann jeweils die wahrscheinlichste
@@ -547,7 +621,7 @@ class Schreiber:
     def __init__(self, cfg, kapitel, sf, muster, fehler_karte):
         self.cfg, self.sf, self.muster, self.fk = cfg, sf, muster, fehler_karte
         self.plaene = {}
-        self.praefixe = [(c["pfad"] + [e["san"]], i) for i, c in enumerate(kapitel, 2) for e in c["eintraege"]]
+        self.praefixe = [(p + [e["san"]], i) for i, c in enumerate(kapitel, 2) for p, es in c.get("gruppen", [(c["pfad"], c["eintraege"])]) for e in es]
         self.neben = collections.defaultdict(list)
         for f in fehler_karte.values(): self.neben[key(f["fb"])].append(f)
 
@@ -634,7 +708,7 @@ def main():
     L = len(cfg["start_san"]); erste = L if b.turn != ich else L + 1
     baum = Baum(cfg, daten, rep); baum.seen[epd(b)] = list(cfg["start_san"])
     wurzel = baum.daten(b, list(cfg["start_san"]), erste)
-    kapitel = kapitel_bilden(cfg, wurzel)
+    kapitel = kapitel_ordnen(cfg, kapitel_bilden(cfg, wurzel), daten)
     intro = list(cfg["start_san"]); kids = wurzel
     while kids and kids[0]["art"] == "daten" and not kids[0]["transpo"]:
         intro.append(kids[0]["san"]); kids = kids[0]["kids"]
@@ -642,6 +716,7 @@ def main():
     linien = quickstart_linien(cfg, wurzel, baum)
     strukturen = strukturen_auswerten(cfg, daten)
     kandidaten = fehler_kandidaten(cfg, kapitel, daten) if cfg["fehler"] else [[] for _ in kapitel]
+    offen = verlaengern(cfg, kapitel, daten, baum.knoten_von)
     print(f"  {len(kapitel)} Kapitel im Hauptteil, {len(linien)} Quickstart Linien, {len(strukturen)} Strukturen", flush=True)
 
     print("3/6 Stockfish", flush=True)
@@ -652,7 +727,10 @@ def main():
     bb = chess.Board()
     for m in intro: bb.push_san(m)
     fens.add(bb.fen())
-    aufgaben = [("E", f"E{cfg['tiefe']}|" + key(f), f, cfg["tiefe"]) for f in fens]
+    start_sf = {f for _, f, _ in offen}
+    aufgaben = [("E", f"E{cfg['tiefe']}|" + key(f), f, cfg["tiefe"]) for f in fens if f not in start_sf]
+    for _, f, n in offen:
+        aufgaben.append(("L", f"L{cfg['tiefe']}|{key(f)}|{n}", f, n, cfg["tiefe"]))
     for st in kandidaten:
         for d, tot, kand in st:
             bx = chess.Board(d["fa"]); ucis = sorted(bx.parse_san(m).uci() for m, _ in kand)
@@ -663,6 +741,12 @@ def main():
         for m in pfad: bx.push_san(m)
         aufgaben.append(("L", f"L{cfg['tiefe']}|{key(bx.fen())}|{q_ende - len(pfad)}", bx.fen(), max(q_ende - len(pfad), 0), cfg["tiefe"]))
     sf = stockfish(cfg, aufgaben)
+    stockfish_anhaengen(cfg, offen, sf)
+    fens = set()
+    for c in kapitel:
+        for e in c["eintraege"]: blaetter(e, fens)
+    for e in zus: blaetter(e, fens)
+    fens.add(bb.fen())
 
     print("4/6 Fehler des Gegners und Musterpartien", flush=True)
     fehler_liste, fehler_karte = fehler_auswerten(cfg, kapitel, kandidaten, sf, daten) if cfg["fehler"] else ([[] for _ in kapitel], {})
@@ -677,7 +761,10 @@ def main():
             f"REGELN: Bei jedem Zug von {gegner} die {cfg['antworten']} meistgespielten Antworten, in den Zügen "
             f"{', '.join(map(str, cfg['fruehe_zuege_ab_5_prozent']))} zusätzlich jede ab 5 %. Bei {seite(ich)} ist der meistgespielte Zug Hauptvariante, "
             f"der Repertoirezug steht markiert daneben. Eine Linie verzweigt, solange mindestens {cfg['min_partien']} Partien die Stellung erreichen, "
-            f"höchstens bis Zug {cfg['bis_zug']}. Die Prozentzahl im Kapitelnamen ist der Anteil aller ausgewerteten Partien, die das Kapitel erreichen. "
+            f"höchstens bis Zug {cfg['bis_zug']}. Die Prozentzahl im Kapitelnamen ist der Anteil aller ausgewerteten Partien, die das Kapitel erreichen, die Kapitel sind danach sortiert. "
+            f"Kapitel unter {zahl(cfg['kapitel_min_anteil'], 0)} % sind je Verzweigung als seltene Abweichungen am Ende zusammengefasst. "
+            f"Die Hauptvariante jedes Kapitels läuft mindestens bis Zug {cfg['kapitel_min_zug']}: erst mit dem meistgespielten Zug, solange mindestens "
+            f"{cfg['verlaengern_min_partien']} Partien die Stellung erreichen, danach mit dem besten Zug laut Stockfish (jeweils kommentiert). "
             f"Zugumstellungen verweisen auf das Kapitel, in dem die Stellung zuerst vorkommt. "
             f"FEHLER: Am Ende jedes Kapitels stehen die häufigsten Fehler von {gegner}. Als Fehler zählt ein Zug, der laut Stockfish mindestens "
             f"{zahl(cfg['fehler_grenze'])} Gewinnchancen kostet (Skala von minus 1 bis plus 1 wie bei Lichess, in ausgeglichenen Stellungen etwa ein Bauer). "
@@ -692,9 +779,14 @@ def main():
     for i, (c, fl) in enumerate(zip(kapitel, fehler_liste), 2):
         pz = gesamtanteil(c, daten)
         anteil = f" ({zahl(pz)} % gesamt)" if pz >= 0.1 else (" (unter 0,1 % gesamt)" if pz > 0 else "")
-        g = neues_spiel(cfg, f"Teil {c['teil']}: {i:02d} {c['name']}{anteil}")
-        n, _ = zuege_setzen(g, c["pfad"])
-        for e in c["eintraege"]: w.add(n, e)
+        g = neues_spiel(cfg, f"{i:02d} {c['name']}{anteil}")
+        n0, b0 = zuege_setzen(g, c["pfad"])
+        for p, es in c["gruppen"]:
+            n = n0; bx = b0.copy()
+            for m in p[len(c["pfad"]):]:
+                mv = bx.parse_san(m); bx.push(mv)
+                n = next((v for v in n.variations if v.move == mv), None) or n.add_variation(mv)
+            for e in es: w.add(n, e)
         if fl:
             teile = []
             for j, f in enumerate(fl, 1):
@@ -704,10 +796,10 @@ def main():
             ende = g.end()
             ende.comment = (ende.comment + " " if ende.comment else "") + f"HÄUFIGSTE FEHLER VON {gegner.upper()} IN DIESEM KAPITEL: " + " ".join(teile)
         spiele.append(g)
-    nr = len(kapitel) + 2; teil = (kapitel[-1]["teil"] + 1) if kapitel else 1
+    nr = len(kapitel) + 2
     texte = json.load(open(cfg["strukturen_text"], encoding="utf-8")) if cfg.get("strukturen_text") and os.path.exists(cfg["strukturen_text"]) else {}
     for j, s in enumerate(strukturen, 1):
-        g = neues_spiel(cfg, f"Teil {teil}: {nr:02d} Struktur {j}: {zentrum(s['id'])}", fen=s["beispiel"] + f" 0 {cfg['strukturen_zug'] + 1}")
+        g = neues_spiel(cfg, f"{nr:02d} Struktur {j}: {zentrum(s['id'])}", fen=s["beispiel"] + f" 0 {cfg['strukturen_zug'] + 1}")
         txt = (f"BAUERNSTRUKTUR im Zentrum (Linien c bis f) nach Zug {cfg['strukturen_zug']}: {zentrum(s['id'])}. Die Stellung zeigt die häufigste Partie mit dieser Struktur. "
                f"Kommt in {zahl(s['anteil'])} % der Partien vor, die Zug {cfg['strukturen_zug']} erreichen ({s['n']} Partien), "
                f"{seite(ich)} punktet {zahl(s['quote'], 0)} %. "
@@ -719,14 +811,13 @@ def main():
                 for x, a, q in s["hebel"]) + ". "
         if s["id"] in texte: txt += "IDEEN: " + texte[s["id"]]
         g.comment = txt; spiele.append(g); nr += 1
-    if strukturen: teil += 1
     for p in cfg["anhang_pgn"]:
         h = open(p, encoding="utf-8-sig")
         while True:
             g0 = chess.pgn.read_game(h)
             if g0 is None: break
             titel = g0.headers.get("White", "?") if g0.headers.get("Black", "?") == "?" else g0.headers.get("Black")
-            g = neues_spiel(cfg, f"Teil {teil}: {nr:02d} {titel}"); g.comment = g0.comment
+            g = neues_spiel(cfg, f"{nr:02d} {titel}"); g.comment = g0.comment
             def kopie(src, dst):
                 for v in src.variations:
                     x = dst.add_variation(v.move); x.comment = v.comment; x.nags = set(v.nags); kopie(v, x)
