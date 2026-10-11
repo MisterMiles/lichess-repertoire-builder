@@ -15,6 +15,8 @@
 #   --name NAME       Name des Ordners für die Ergebnisse     (Standard aus Farbe und Zügen)
 #   --repertoire PGN  eigenes Repertoire, dessen Züge markiert werden
 #   --schnell         schneller Probelauf mit geringer Stockfish Tiefe
+#   --notation de     Kapitelnamen und Kommentare mit deutschen Figuren (S, L, T, D)
+#                     statt englischer (N, B, R, Q). Die Züge selbst bleiben Standard PGN.
 #
 # Alles landet in einem Ordner mit dem Namen des Repertoires. Ein zweiter Aufruf
 # mit gleichen Angaben nutzt die schon geladenen Partien und rechnet nur Neues.
@@ -22,11 +24,11 @@
 
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-hilfe() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; }
+hilfe() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; }
 
 [ $# -lt 2 ] && { hilfe; exit 1; }
 FARBE="$1"; START="$2"; shift 2
-ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; DATEI=""; NAME=""; REP=""; SCHNELL=""
+ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; DATEI=""; NAME=""; REP=""; SCHNELL=""; NOTATION="en"
 while [ $# -gt 0 ]; do
   case "$1" in
     --elo) ELO="$2"; shift 2;;
@@ -37,6 +39,7 @@ while [ $# -gt 0 ]; do
     --name) NAME="$2"; shift 2;;
     --repertoire) REP="$2"; shift 2;;
     --schnell) SCHNELL=1; shift;;
+    --notation) NOTATION="$2"; shift 2;;
     -h|--help) hilfe; exit 0;;
     *) echo "Unbekannte Option: $1"; exit 1;;
   esac
@@ -148,11 +151,12 @@ fi
 
 # 2. Konfiguration anlegen (nur beim ersten Mal)
 if [ ! -f "$OUT/konfiguration.json" ]; then
-  "$PY" - "$OUT/konfiguration.json" "$FARBE" "$START" "$NAME" "$REP" <<'PYEOF'
+  "$PY" - "$OUT/konfiguration.json" "$FARBE" "$START" "$NAME" "$REP" "$NOTATION" <<'PYEOF'
 import json, os, sys
-pfad, farbe, start, name, rep = sys.argv[1:]
+pfad, farbe, start, name, rep, notation = sys.argv[1:]
 c = {"titel": f"Repertoire {farbe} {start}", "farbe": farbe, "start": start,
-     "daten": "partien.tsv", "ausgabe": name + ".pgn", "prozesse": max(1, (os.cpu_count() or 2) - 1)}
+     "daten": "partien.tsv", "ausgabe": name + ".pgn", "prozesse": max(1, (os.cpu_count() or 2) - 1),
+     "notation": "de" if notation.lower().startswith("de") else "en"}
 if farbe == "schwarz": c["erste_antworten"] = 5
 if rep: c["repertoire_pgn"] = os.path.abspath(rep)
 json.dump(c, open(pfad, "w", encoding="utf-8"), indent=2, ensure_ascii=False)

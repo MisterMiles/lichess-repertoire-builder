@@ -68,6 +68,7 @@ bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
 | `--name NAME` | Ordnername für die Ergebnisse | aus Farbe und Zügen |
 | `--repertoire PGN` | eigenes Repertoire, dessen Züge markiert werden | keins |
 | `--schnell` | schneller Probelauf mit geringer Stockfish Tiefe | aus |
+| `--notation de` | Kapitelnamen und Kommentare mit deutschen Figuren (S, L, T, D) | englisch (N, B, R, Q) |
 
 Ein erneuter Aufruf mit gleichen Angaben nutzt die schon geladenen Partien und Stockfish Ergebnisse. Für Feineinstellungen `konfiguration.json` im Ordner bearbeiten (Felder siehe unten) und erneut starten.
 
@@ -136,6 +137,7 @@ Eine JSON Datei je Repertoire, Vorlagen: `beispiel_weiss.json`, `beispiel_schwar
 | `strukturen_text` | JSON Datei mit eigenen Erklärungen je Struktur (`{"id": "Text"}`, die ids stehen in `<ausgabe>_strukturen.json`) | keine |
 | `stockfish`, `tiefe`, `fehler_tiefe`, `prozesse` | Pfad zur Engine, Suchtiefe am Linienende und bei der Fehlersuche, parallele Prozesse | stockfish, 18, 14, 2 |
 | `eco` | ECO für die Kopfzeilen | ? |
+| `notation` | Figuren in Kapitelnamen und Kommentaren: `en` (N, B, R, Q) oder `de` (S, L, T, D). Die Züge in der PGN sind immer Standard | en |
 
 ## 3. Repertoire bauen
 

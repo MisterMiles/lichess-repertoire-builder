@@ -44,7 +44,7 @@ bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
 bash repertoire.sh weiss "1. e4" --monate 3
 ```
 
-Züge schreibst du in englischer Notation: N Springer, B Läufer, R Turm, Q Dame, K König. Bei Schwarz gehört deine eigene Antwort mit in die Startzüge.
+Züge schreibst du in englischer Notation: N Springer, B Läufer, R Turm, Q Dame, K König. Bei Schwarz gehört deine eigene Antwort mit in die Startzüge. Auch die PGN nutzt englische Notation, mit `--notation de` stehen Kapitelnamen und Kommentare mit deutschen Figuren (S, L, T, D).
 
 ## Was du bekommst
 

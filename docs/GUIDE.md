@@ -70,6 +70,7 @@ bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
 | `--name NAME` | folder name for the results | from colour and moves |
 | `--repertoire PGN` | your own repertoire, its moves get marked | none |
 | `--schnell` | quick trial run with low Stockfish depth | off |
+| `--notation de` | German piece letters (S, L, T, D) in chapter names and comments | English (N, B, R, Q) |
 
 Running it again with the same arguments reuses the games and the Stockfish results. For fine tuning, edit `konfiguration.json` in the folder (keys below) and run again.
 
@@ -138,6 +139,7 @@ One JSON file per repertoire, templates: `beispiel_weiss.json` (White), `beispie
 | `strukturen_text` | JSON file with your own explanation per structure (`{"id": "text"}`, the ids are listed in `<output>_strukturen.json`) | none |
 | `stockfish`, `tiefe`, `fehler_tiefe`, `prozesse` | engine path, search depth at line ends and for the mistake search, parallel processes | stockfish, 18, 14, 2 |
 | `eco` | ECO code for the headers | ? |
+| `notation` | piece letters in chapter names and comments: `en` (N, B, R, Q) or `de` (S, L, T, D). The moves in the PGN are always standard | en |
 
 ## 3. Build the repertoire
 

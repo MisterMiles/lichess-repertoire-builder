@@ -22,7 +22,7 @@ STANDARD = {
     "min_partien": 20, "bis_zug": 15, "hv_tiefe": 4, "kapitel_max": 800, "kapitel_teilen_ab": 300,
     "zusammenfassung_bis_zug": 5, "system": [], "ohne_systemfilter": [], "repertoire_pgn": None,
     "repertoire_kommentare": True, "repertoire_zuege": "alle", "kommentare_entfernen": [], "anhang_pgn": [], "statistik": False,
-    "stockfish": "stockfish", "tiefe": 18, "prozesse": 2, "eco": "?", "notation": "de",
+    "stockfish": "stockfish", "tiefe": 18, "prozesse": 2, "eco": "?", "notation": "en",
     "quickstart_linien": 15, "quickstart_bis_zug": 14,
     "fehler": True, "fehler_tiefe": 14, "fehler_grenze": 0.2, "fehler_min_anteil": 5,
     "fehler_min_partien": 10, "fehler_anzahl": 5,

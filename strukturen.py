@@ -96,7 +96,7 @@ STRUKTUREN = [
      "mit Dame über e1 nach h4 oder g3. Der zentrale Hebel ist e3-e4. Weiß achtet auf die Schwächen auf e3 und der Diagonale e1-h4."),
     ("Holländische Struktur",
      lambda w, s: _hat(s, "f5") and not _hat(s, "d5") and not _hat(s, "e5"),
-     "Schwarz kontrolliert e4 mit f5, oft folgen ...Lb7 und ein Angriff am Königsflügel mit ...De8-h5. Der zentrale Hebel ist ...e5. "
+     "Schwarz kontrolliert e4 mit f5, oft folgen der Läufer auf b7 und ein Angriff am Königsflügel mit der Dame über e8 nach h5. Der zentrale Hebel ist ...e5. "
      "Weiß greift mit e2-e4 im Zentrum an."),
     ("Colle oder London Dreieck",
      lambda w, s: _hat(w, "c3", "d4", "e3") and not _hat(w, "f4"),
