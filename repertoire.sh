@@ -19,6 +19,7 @@
 #   --name NAME          folder name for the results                (default from colour and moves)
 #   --repertoire PGN     your own repertoire, its moves get marked
 #   --quick              quick trial run with low Stockfish depth (--schnell)
+#   --plain              no animation, plain output (also automatic when the output goes to a file)
 #   --notation de        German piece letters (S, L, T, D) in chapter names and comments
 #                        instead of English (N, B, R, Q). The moves stay standard PGN.
 #
@@ -29,7 +30,8 @@
 
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-hilfe() { sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; }
+. "$DIR/animation.sh"
+hilfe() { sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; }
 
 [ $# -lt 2 ] && { hilfe; exit 1; }
 FARBE="$1"; START=$(printf '%s' "$2" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g'); shift 2
@@ -46,6 +48,7 @@ while [ $# -gt 0 ]; do
     --repertoire) REP="$2"; shift 2;;
     --quick|--schnell) SCHNELL=1; shift;;
     --notation) NOTATION="$2"; shift 2;;
+    --plain) export REPERTOIRE_PLAIN=1; shift;;
     -h|--help|--hilfe) hilfe; exit 0;;
     *) echo "Unknown option: $1 (bash repertoire.sh --help shows all options)"; exit 1;;
   esac
@@ -105,8 +108,8 @@ mkdir -p "$OUT"
 echo "Repertoire: $FARBE, Startzüge \"$START\", Elo $ELO_MIN bis $ELO_MAX, Ordner $OUT"
 
 # 1. Partien holen und filtern
-filtern() {  # $1 Quelle (-i DATEI oder -m MONAT), $2 Wert, $3 Ziel ohne Endung
-  bash "$DIR/lichess_filter.sh" -s "$START" "$1" "$2" -o "$3.pgn" --tsv "$3.tsv" --elo-min "$ELO_MIN" --elo-max "$ELO_MAX"
+filtern() {  # $1 Quelle (-i DATEI oder -m MONAT), $2 Wert, $3 Ziel ohne Endung, $4 Titel
+  REPERTOIRE_TITEL="${4:-Filtern}" bash "$DIR/lichess_filter.sh" -s "$START" "$1" "$2" -o "$3.pgn" --tsv "$3.tsv" --elo-min "$ELO_MIN" --elo-max "$ELO_MAX"
 }
 if [ -n "$DATEI" ]; then
   if [ -s "$OUT/partien.tsv" ]; then
@@ -153,11 +156,16 @@ PYEOF
     if [ -s "$ZIEL.tsv" ]; then echo "$M: schon gefiltert, wird wiederverwendet."; continue; fi
     if [ -n "$BANK" ]; then
       echo "$M: suche in der Partienbank"
-      zstd -dc "$BANK/lichess_$M.tsv.zst" | LC_ALL=C "$AWK" -F'\t' -v start="$STARTZ" -v emin="$ELO_MIN" -v emax="$ELO_MAX" '
+      ANIM=""; anim_an && { ANIM=1; : > "$ZIEL.fortschritt"; anim_start "Suche $M" --pv "$ZIEL.fortschritt"; }
+      if [ -n "$ANIM" ]; then
+        strom_datei "$BANK/lichess_$M.tsv.zst" "$ZIEL.fortschritt"
+      else
+        cat "$BANK/lichess_$M.tsv.zst"
+      fi | zstd -dc | LC_ALL=C "$AWK" -F'\t' -v start="$STARTZ" -v emin="$ELO_MIN" -v emax="$ELO_MAX" '
         BEGIN { s = start " "; L = length(s) }
         substr($12 " ", 1, L) == s { a = $4 + 0; b = $5 + 0; lo = (a < b ? a : b); hi = (a < b ? b : a)
                                      if (lo >= emin && hi <= emax) print }' > "$ZIEL.tsv.tmp"
-      mv "$ZIEL.tsv.tmp" "$ZIEL.tsv"
+      anim_stopp; rm -f "$ZIEL.fortschritt"; mv "$ZIEL.tsv.tmp" "$ZIEL.tsv"
       echo "$M: $(wc -l < "$ZIEL.tsv" | tr -d ' ') Partien"
       continue
     fi
@@ -166,13 +174,13 @@ PYEOF
       F="$ARCHIV/lichess_db_standard_rated_${M}.pgn.zst"
       if [ ! -s "$F" ]; then
         echo "$M: lade Monatsdatei nach $F (etwa 29 GB, abgebrochene Downloads werden fortgesetzt)"
-        curl -fL -C - --retry 5 --retry-delay 10 -# -o "$F.part" "$URL" || { echo "$M: Download fehlgeschlagen. Nochmal starten setzt ihn fort."; exit 1; }
+        laden "$URL" "$F.part" "Download $M" || { echo "$M: Download fehlgeschlagen. Nochmal starten setzt ihn fort."; exit 1; }
         mv "$F.part" "$F"
       fi
-      echo "$M: filtere $F"; filtern -i "$F" "$ZIEL"
+      echo "$M: filtere $F"; filtern -i "$F" "$ZIEL" "Filtern $M"
     else
       echo "$M: streame und filtere (etwa 29 GB, nichts davon wird gespeichert)"
-      filtern -m "$M" "$ZIEL"
+      filtern -m "$M" "$ZIEL" "Laden und filtern $M"
     fi
   done
   # Tabelle aus allen gewünschten Monaten neu zusammensetzen

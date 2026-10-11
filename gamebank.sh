@@ -14,10 +14,12 @@
 #                     Without --archive the file is streamed from the internet.
 #   --with-bullet     include bullet games (--mit-bullet, default: without)
 #   --jobs N          parallel processes (--teile, default: CPU cores minus one, at most 8)
+#   --plain           no animation, plain output (also: REPERTOIRE_PLAIN=1)
 
 set -e -o pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ $# -lt 2 ] && { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+. "$DIR/animation.sh"
+[ $# -lt 2 ] && { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 BANK="$1"; shift
 MONATE=""; ARCHIV=""; BULLET=0; TEILE=""
 while [ $# -gt 0 ]; do
@@ -25,6 +27,7 @@ while [ $# -gt 0 ]; do
     --archive|--archiv) ARCHIV="$2"; shift 2;;
     --with-bullet|--mit-bullet) BULLET=1; shift;;
     --jobs|--teile) TEILE="$2"; shift 2;;
+    --plain) export REPERTOIRE_PLAIN=1; shift;;
     [0-9][0-9][0-9][0-9]-[0-9][0-9]) MONATE="$MONATE $1"; shift;;
     *) echo "Unknown option: $1"; exit 1;;
   esac
@@ -46,7 +49,7 @@ for M in $MONATE; do
     QUELLE="$ARCHIV/lichess_db_standard_rated_${M}.pgn.zst"
     if [ ! -s "$QUELLE" ]; then
       echo "Partienbank $M: lade Monatsdatei nach $QUELLE (etwa 29 GB, abgebrochene Downloads werden fortgesetzt)"
-      curl -fL -C - --retry 5 --retry-delay 10 -# -o "$QUELLE.part" "$URL" || { echo "$M: Download fehlgeschlagen. Nochmal starten setzt ihn fort."; exit 1; }
+      laden "$URL" "$QUELLE.part" "Download $M" || { echo "$M: Download fehlgeschlagen. Nochmal starten setzt ihn fort."; exit 1; }
       mv "$QUELLE.part" "$QUELLE"
     fi
   fi
@@ -59,12 +62,16 @@ for M in $MONATE; do
     PIDS="$PIDS $!"; [ "$i" -gt 0 ] && ZIELE="$ZIELE $TMP/f$i"
   done
   START=$(date +%s)
-  if [ -n "$QUELLE" ]; then
-    if command -v pv >/dev/null 2>&1; then pv "$QUELLE" | zstd -dc; else zstd -dc "$QUELLE"; fi
+  if anim_an; then
+    anim_start "Partienbank $M" --pv "$TMP/fortschritt"
+    if [ -n "$QUELLE" ]; then strom_datei "$QUELLE" "$TMP/fortschritt"; else strom_url "$URL" "$TMP/fortschritt"; fi | zstd -dc | tee $ZIELE > "$TMP/f0"
+  elif [ -n "$QUELLE" ]; then
+    if command -v pv >/dev/null 2>&1; then pv "$QUELLE" | zstd -dc; else zstd -dc "$QUELLE"; fi | tee $ZIELE > "$TMP/f0"
   else
-    curl -fL --retry 5 --retry-delay 10 -# "$URL" | zstd -dc
-  fi | tee $ZIELE > "$TMP/f0"
+    curl -fL --retry 5 --retry-delay 10 -# "$URL" | zstd -dc | tee $ZIELE > "$TMP/f0"
+  fi
   FEHLER=0; for p in $PIDS; do wait "$p" || FEHLER=1; done
+  anim_stopp
   [ "$FEHLER" = 1 ] && { echo "Partienbank $M: Fehler beim Umwandeln."; rm -rf "$TMP"; exit 1; }
   cat "$TMP"/t*.zst > "$ZIEL.tmp" && mv "$ZIEL.tmp" "$ZIEL"; rm -rf "$TMP"
   echo "Partienbank $M: fertig nach $(( ($(date +%s) - START) / 60 )) Min., $(du -h "$ZIEL" | cut -f1)"

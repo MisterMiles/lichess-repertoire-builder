@@ -59,6 +59,7 @@ The PGN comments are in German.
 - **Time:** the games of one Lichess month are streamed from the internet (about 29 GB, nothing of it is stored). Depending on your connection this takes 30 minutes to a few hours. Stockfish then needs 15 to 60 minutes. With `--quick` you see a result within minutes once the games are in.
 - **More games:** `--months 3` takes the last three full months, `--month 2026-07..2026-09` a fixed range. Every month is downloaded and filtered on its own, so the waiting time grows with it. With `--archive FOLDER` the monthly files are kept (about 29 GB each) and are not downloaded again next time.
 - **Several analyses:** with `--bank FOLDER` every month is turned once into a game bank, a compact table of all games (about 5 GB per month). After that every further analysis with other starting moves, colour or rating range needs only seconds per month before Stockfish starts. Example: `bash repertoire.sh white "1. e4" --months 3 --bank ~/gamebank`
+- **While you wait:** a knight hops across a small board for every step, with percent and time left. `--plain` switches it off.
 - **Running again:** with the same arguments the script reuses the downloaded games and only computes what is missing.
 - **Linux:** instead of Homebrew use `sudo apt install python3-venv zstd pv mawk stockfish`, the rest is the same.
 - **More settings:** rating range, month, your own repertoire and every fine tuning option are in the [full guide](docs/GUIDE.md).

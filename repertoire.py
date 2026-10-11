@@ -16,6 +16,7 @@ from multiprocessing import Pool
 import chess, chess.pgn, chess.engine
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import strukturen as strukturmodul
+import animation
 
 STANDARD = {
     "farbe": "weiss", "erste_antworten": 10, "antworten": 3, "fruehe_zuege_ab_5_prozent": [2, 3],
@@ -72,9 +73,10 @@ def dauer(sek):
     return f"{sek // 3600} Std. {sek % 3600 // 60} Min." if sek >= 3600 else (f"{sek // 60} Min." if sek >= 60 else f"{sek} Sek.")
 
 class Fortschritt:
-    """Balken mit Prozent, Anzahl und geschätzter Restzeit."""
+    """Balken mit Prozent, Anzahl und geschätzter Restzeit. Im Terminal als hüpfender Springer."""
     def __init__(self, name, gesamt):
         self.name, self.gesamt, self.t0, self.n, self.zuletzt = name, max(gesamt, 1), time.time(), 0, 0.0
+        self.springer = animation.Springer(name) if animation.an() else None
         self.zeige(True)
     def schritt(self, k=1):
         self.n += k; self.zeige(False)
@@ -83,9 +85,13 @@ class Fortschritt:
         if not sofort and jetzt - self.zuletzt < 0.5: return
         self.zuletzt = jetzt; a = min(self.n / self.gesamt, 1.0); voll = int(a * 20)
         rest = f"noch ca. {dauer((jetzt - self.t0) / a * (1 - a))}" if a > 0.01 else "Restzeit wird geschätzt"
+        if self.springer:
+            self.springer.zeichne(a, f"{self.n}/{self.gesamt}  {rest}"); return
         sys.stderr.write(f"\r  {self.name:<13} [{'█' * voll}{'░' * (20 - voll)}] {zahl(a * 100):>5} %  {self.n}/{self.gesamt}  {rest}      ")
         sys.stderr.flush()
     def fertig(self):
+        if self.springer:
+            self.springer.fertig(f"fertig in {dauer(time.time() - self.t0)}"); return
         sys.stderr.write(f"\r  {self.name:<13} [{'█' * 20}] 100,0 %  fertig in {dauer(time.time() - self.t0)}{' ' * 30}\n")
         sys.stderr.flush()
 

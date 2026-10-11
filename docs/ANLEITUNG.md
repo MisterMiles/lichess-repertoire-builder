@@ -68,6 +68,7 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 | `--file DATEI` (`--datei`) | eigene Lichess Datei (`.pgn` oder `.pgn.zst`) statt Download | aus |
 | `--name NAME` | Ordnername für die Ergebnisse | aus Farbe und Zügen |
 | `--repertoire PGN` | eigenes Repertoire, dessen Züge markiert werden | keins |
+| `--plain` | keine Springer Animation, schlichte Ausgabe (automatisch, wenn die Ausgabe in eine Datei geht) | aus |
 | `--quick` (`--schnell`) | schneller Probelauf mit geringer Stockfish Tiefe | aus |
 | `--notation de` | Kapitelnamen und Kommentare mit deutschen Figuren (S, L, T, D) | englisch (N, B, R, Q) |
 

@@ -70,6 +70,7 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 | `--file FILE` (`--datei`) | your own Lichess file (`.pgn` or `.pgn.zst`) instead of the download | off |
 | `--name NAME` | folder name for the results | from colour and moves |
 | `--repertoire PGN` | your own repertoire, its moves get marked | none |
+| `--plain` | no knight animation, plain output (automatic when the output goes to a file) | off |
 | `--quick` (`--schnell`) | quick trial run with low Stockfish depth | off |
 | `--notation de` | German piece letters (S, L, T, D) in chapter names and comments | English (N, B, R, Q) |
 
