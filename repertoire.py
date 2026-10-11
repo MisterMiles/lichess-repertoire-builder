@@ -169,6 +169,9 @@ def lade_repertoire(cfg):
     """Alle Stellungen aus der Repertoire PGN: Züge je Stellung, eigene Züge gelten als Repertoirezüge."""
     rep = {}
     if not cfg.get("repertoire_pgn"): return rep
+    if not os.path.exists(cfg["repertoire_pgn"]):
+        print(f"  Hinweis: Repertoire PGN nicht gefunden ({cfg['repertoire_pgn']}), es geht ohne weiter.", flush=True)
+        return rep
     weg = [re.compile(x) for x in cfg["kommentare_entfernen"]]
     def filt(c):
         if not cfg["repertoire_kommentare"]: return ""
@@ -805,6 +808,8 @@ def main():
         g, s["name"], s["merkmale"] = strukturmodul.kapitel(s, nr, cfg, ich, neues_spiel, de, zahl, seite, texte, vergeben)
         spiele.append(g); nr += 1
     for p in cfg["anhang_pgn"]:
+        if not os.path.exists(p):
+            print(f"  Hinweis: Anhang nicht gefunden ({p}), wird übersprungen.", flush=True); continue
         h = open(p, encoding="utf-8-sig")
         while True:
             g0 = chess.pgn.read_game(h)
