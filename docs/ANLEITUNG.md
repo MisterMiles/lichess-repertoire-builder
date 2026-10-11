@@ -140,7 +140,7 @@ Eine JSON Datei je Repertoire, Vorlagen: `beispiel_weiss.json`, `beispiel_schwar
 | `hv_tiefe` | Zug des Gegners, an dem die Hauptvariante in Kapitel geteilt wird | 4 |
 | `kapitel_max` | größere Kapitel werden geteilt | 800 Züge |
 | `kapitel_min_anteil` | Kapitel, die weniger Partien (in % aller) erreichen, werden je Verzweigung zusammengelegt und ans Ende gestellt | 2 |
-| `kapitel_min_zug`, `verlaengern_min_partien` | die Hauptvariante jedes Kapitels läuft mindestens bis zu diesem Zug: erst die meistgespielten Züge, solange so viele Partien übrig sind, dann Stockfish | 12, 5 |
+| `kapitel_min_zug`, `verlaengern_min_partien` | die Hauptvariante jedes Kapitels läuft mindestens bis zu diesem Zug: erst die meistgespielten Züge, solange so viele Partien übrig sind, dann Stockfish | 15, 5 |
 | `repertoire_pgn` | bestehendes Repertoire, eigene Züge daraus werden als Repertoirezug markiert, Kommentare übernommen | keins |
 | `repertoire_zuege` | `"alle"`: jeder eigene Zug der Datei gilt als Repertoirezug, `"hauptzug"`: nur der jeweils erste | alle |
 | `kommentare_entfernen` | reguläre Ausdrücke für Sätze, die aus diesen Kommentaren entfallen | keine |
@@ -186,7 +186,7 @@ Richtwerte für etwa 190.000 Partien auf einem Rechner mit 2 Prozessen: Daten la
 
 - 01 Intro mit Regeln und Symbolerklärung, dazu die Hauptvariante.
 - Die Kapitel sind danach sortiert, wie oft du sie in der Praxis bekommst, das wahrscheinlichste zuerst. Kapitel unter 2 % werden je Verzweigung als „Seltene Abweichungen“ am Ende zusammengefasst.
-- Die Hauptvariante jedes Kapitels läuft mindestens bis Zug 12: erst die meistgespielten Züge, solange mindestens 5 Partien übrig sind, danach die besten Züge laut Stockfish (per Kommentar markiert). Endet sie in einer Zugumstellung, geht es mit der Hauptvariante von dort weiter.
+- Die Hauptvariante jedes Kapitels läuft mindestens bis Zug 15: erst die meistgespielten Züge, solange mindestens 5 Partien übrig sind, danach die besten Züge laut Stockfish (per Kommentar markiert). Endet sie in einer Zugumstellung, geht es mit der Hauptvariante von dort weiter.
 - Im Kapitelnamen steht, wie viel Prozent aller ausgewerteten Partien das Kapitel erreichen, z. B. `(4,2 % gesamt)`.
 - Hauptvariante ist der meistgespielte Zug, der eigene Repertoirezug steht markiert daneben.
 - Am Linienende: Bewertungszeichen von Stockfish, Musterpartie mit dem höchsten Elo Schnitt und blaue Pfeile für den typischen Aufbau aus der Praxis: die nächsten 3 eigenen Züge (ohne Schlagzüge), mit denen deine Seite nach dieser Stellung am besten gepunktet hat, ab 5 Partien. Bei weniger Partien zeigt ein grüner Pfeil stattdessen den besten Zug laut Stockfish.

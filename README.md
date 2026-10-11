@@ -49,7 +49,7 @@ Colour is `white` or `black`. Moves use English notation. For Black, include you
 ## What you get
 
 A folder named after your repertoire, containing:
-- **`….pgn`**: your repertoire, one chapter per line, sorted by how often you will meet it in practice (the share is in the chapter name). Every chapter's main line runs at least to move 12, rare lines are bundled at the end. Every line ends with a Stockfish evaluation, a model game and blue arrows for the typical setup that scored best in practice, every chapter ends with your opponents' most frequent mistakes and how to punish them. Typical pawn structures are included too.
+- **`….pgn`**: your repertoire, one chapter per line, sorted by how often you will meet it in practice (the share is in the chapter name). Every chapter's main line runs at least to move 15, rare lines are bundled at the end. Every line ends with a Stockfish evaluation, a model game and blue arrows for the typical setup that scored best in practice, every chapter ends with your opponents' most frequent mistakes and how to punish them. Typical pawn structures are included too.
 - **`…_quickstart.pgn`**: the 15 most likely lines up to move 14, perfect for practice.
 
 The PGN comments are in German.

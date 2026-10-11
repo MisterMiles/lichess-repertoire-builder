@@ -28,7 +28,7 @@ STANDARD = {
     "fehler_min_partien": 10, "fehler_anzahl": 5,
     "strukturen_zug": 12, "strukturen_anzahl": 5, "strukturen_text": None,
     "plan_zuege": 5, "plan_min_partien": 5,
-    "kapitel_min_anteil": 2, "kapitel_min_zug": 12, "verlaengern_min_partien": 5,
+    "kapitel_min_anteil": 2, "kapitel_min_zug": 15, "verlaengern_min_partien": 5,
 }
 
 # ---------------------------------------------------------------- Hilfen

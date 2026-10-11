@@ -142,7 +142,7 @@ One JSON file per repertoire, templates: `beispiel_weiss.json` (White), `beispie
 | `hv_tiefe` | opponent move at which the main line is split into chapters | 4 |
 | `kapitel_max` | larger chapters are split | 800 moves |
 | `kapitel_min_anteil` | chapters reached by fewer games (in % of all) are merged per branch point and placed at the end | 2 |
-| `kapitel_min_zug`, `verlaengern_min_partien` | every chapter's main line runs at least to this move: most played moves while at least this many games remain, then Stockfish | 12, 5 |
+| `kapitel_min_zug`, `verlaengern_min_partien` | every chapter's main line runs at least to this move: most played moves while at least this many games remain, then Stockfish | 15, 5 |
 | `repertoire_pgn` | existing repertoire, your moves in it are marked as repertoire moves, comments are kept | none |
 | `repertoire_zuege` | `"alle"`: every own move in that file is a repertoire move, `"hauptzug"`: only the first one per position | alle |
 | `kommentare_entfernen` | regular expressions for sentences to drop from those comments | none |
@@ -188,7 +188,7 @@ Rough values for about 190,000 games with 2 processes: loading 10 minutes, Stock
 
 - 01 Intro with rules and symbols, plus the main line.
 - Chapters are sorted by how often you will meet them, the most likely first. Chapters below 2 % are merged per branch point into "Seltene Abweichungen" at the end.
-- Every chapter's main line runs at least to move 12: most played moves while at least 5 games remain, then Stockfish's best moves (marked in a comment). If the main line ends in a transposition, it continues with the main line from there.
+- Every chapter's main line runs at least to move 15: most played moves while at least 5 games remain, then Stockfish's best moves (marked in a comment). If the main line ends in a transposition, it continues with the main line from there.
 - The chapter name shows the share of all evaluated games that reach the chapter, e.g. `(4,2 % gesamt)`.
 - The main line is the most played move, your repertoire move is marked next to it.
 - Line ends: Stockfish evaluation symbol, model game with the highest average rating and blue arrows for the typical setup from practice: your next 3 own moves (captures left out) that scored best after this position, at least 5 games. With fewer games a green arrow shows Stockfish's best move instead.
