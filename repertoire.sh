@@ -71,6 +71,23 @@ if [ ! -x "$PY" ]; then
 fi
 "$PY" -c "import chess" 2>/dev/null || "$VENV/bin/pip" install -q chess
 
+# Startzüge prüfen, bevor etwas geladen wird
+"$PY" - "$START" <<'PYEOF' || exit 1
+import sys, re, chess
+b = chess.Board()
+for t in sys.argv[1].split():
+    t = re.sub(r"^\d+\.+", "", t)
+    if not t: continue
+    try: b.push_san(t)
+    except ValueError:
+        farbe = "Weiß" if b.turn else "Schwarz"
+        moegl = ", ".join(sorted(b.san(m) for m in b.legal_moves))
+        print(f"Startzüge ungültig: {t} ist für {farbe} hier nicht möglich.")
+        print(f"Möglich wären: {moegl}")
+        print("Züge in englischer Notation: N Springer, B Läufer, R Turm, Q Dame, K König.")
+        sys.exit(1)
+PYEOF
+
 mkdir -p "$OUT"
 echo "Repertoire: $FARBE, Startzüge \"$START\", Elo $ELO_MIN bis $ELO_MAX, Ordner $OUT"
 

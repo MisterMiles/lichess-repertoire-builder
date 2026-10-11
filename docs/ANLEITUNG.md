@@ -94,7 +94,7 @@ bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o partien.pgn --tsv parti
 | `--elo-min` / `--elo-max` | beide Spieler in diesem Bereich | 1800 / 2499 |
 | `--elo-einer` | mindestens ein Spieler ab diesem Wert | aus |
 | `--mit-bullet`, `--mit-bots` | Bullet oder Bot Partien behalten | ohne |
-| `--halbzuege` | Halbzüge in der Tabelle | 30 |
+| `--halbzuege` | Halbzüge in der Tabelle | 40 |
 | `--enthaelt` | ein Zug, der irgendwo in den ersten Zügen vorkommt (für Zugumstellungen) | aus |
 | `--zug-farbe` | wer diesen Zug spielt, `weiss` oder `schwarz` | weiss |
 | `--bis-zug` | spätestens in diesem Zug | 5 |
@@ -131,7 +131,7 @@ Eine JSON Datei je Repertoire, Vorlagen: `beispiel_weiss.json`, `beispiel_schwar
 | `fehler` | häufige Fehler des Gegners je Kapitel suchen | an |
 | `fehler_grenze` | Verlust auf der Gewinnchancen Skala, ab dem ein Zug als Fehler zählt (0,2 ist die Lichess Grenze für „Fehler“, in ausgeglichenen Stellungen etwa ein Bauer) | 0,2 |
 | `fehler_min_partien`, `fehler_min_anteil`, `fehler_anzahl` | ein Zug wird nur geprüft ab so vielen Partien und so viel Prozent, gezeigt werden die häufigsten | 10, 5 %, 5 |
-| `plan_zuege`, `plan_min_partien` | eigene Züge, die am Linienende als typischer Aufbau aus der Praxis gezeigt werden, und die Mindestzahl an Partien dafür | 3, 5 |
+| `plan_zuege`, `plan_min_partien` | eigene Züge, die am Linienende als typischer Aufbau aus der Praxis gezeigt werden, und die Mindestzahl an Partien dafür | 5, 5 |
 | `strukturen_zug`, `strukturen_anzahl` | Zeitpunkt und Zahl der Bauernstrukturen | Zug 12, 5 |
 | `strukturen_text` | JSON Datei mit eigenen Erklärungen je Struktur (`{"id": "Text"}`, die ids stehen in `<ausgabe>_strukturen.json`) | keine |
 | `stockfish`, `tiefe`, `fehler_tiefe`, `prozesse` | Pfad zur Engine, Suchtiefe am Linienende und bei der Fehlersuche, parallele Prozesse | stockfish, 18, 14, 2 |

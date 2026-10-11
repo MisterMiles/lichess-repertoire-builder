@@ -27,7 +27,7 @@ STANDARD = {
     "fehler": True, "fehler_tiefe": 14, "fehler_grenze": 0.2, "fehler_min_anteil": 5,
     "fehler_min_partien": 10, "fehler_anzahl": 5,
     "strukturen_zug": 12, "strukturen_anzahl": 5, "strukturen_text": None,
-    "plan_zuege": 3, "plan_min_partien": 5,
+    "plan_zuege": 5, "plan_min_partien": 5,
     "kapitel_min_anteil": 2, "kapitel_min_zug": 12, "verlaengern_min_partien": 5,
 }
 
@@ -552,7 +552,7 @@ def musterpartien(cfg, alle, ziele):
         pkt = {"1-0": 1.0, "0-1": 0.0, "1/2-1/2": 0.5}.get(f[5], 0.5)
         if ich == chess.BLACK: pkt = 1 - pkt
         b = chess.Board(); verlauf = []
-        for z in f[11].split()[:maxp]:
+        for z in f[11].split()[:maxp + 2 * nplan]:     # auch hinter dem Linienende, für die Folgezüge
             try: mv = b.parse_san(z.rstrip("?!"))
             except ValueError: break
             eigen = b.turn == ich; san = b.san(mv); nr = b.fullmove_number

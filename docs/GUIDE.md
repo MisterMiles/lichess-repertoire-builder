@@ -96,7 +96,7 @@ bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o games.pgn --tsv games.t
 | `--elo-min` / `--elo-max` | both players within this range | 1800 / 2499 |
 | `--elo-einer` | at least one player at or above this rating | off |
 | `--mit-bullet`, `--mit-bots` | keep bullet or bot games | excluded |
-| `--halbzuege` | half moves stored in the table | 30 |
+| `--halbzuege` | half moves stored in the table | 40 |
 | `--enthaelt` | a move that appears anywhere in the first moves (for transpositions) | off |
 | `--zug-farbe` | who plays that move, `weiss` (White) or `schwarz` (Black) | weiss |
 | `--bis-zug` | at the latest in this move | 5 |
@@ -133,7 +133,7 @@ One JSON file per repertoire, templates: `beispiel_weiss.json` (White), `beispie
 | `fehler` | look for frequent opponent mistakes per chapter | on |
 | `fehler_grenze` | loss on the winning chances scale from which a move counts as a mistake (0.2 is the Lichess threshold for "mistake", about one pawn in a balanced position) | 0.2 |
 | `fehler_min_partien`, `fehler_min_anteil`, `fehler_anzahl` | a move is checked only with at least this many games and this share, the most frequent ones are shown | 10, 5 %, 5 |
-| `plan_zuege`, `plan_min_partien` | own moves shown as the typical setup from practice at each line end, and the minimum number of games for it | 3, 5 |
+| `plan_zuege`, `plan_min_partien` | own moves shown as the typical setup from practice at each line end, and the minimum number of games for it | 5, 5 |
 | `strukturen_zug`, `strukturen_anzahl` | move and number of pawn structures | move 12, 5 |
 | `strukturen_text` | JSON file with your own explanation per structure (`{"id": "text"}`, the ids are listed in `<output>_strukturen.json`) | none |
 | `stockfish`, `tiefe`, `fehler_tiefe`, `prozesse` | engine path, search depth at line ends and for the mistake search, parallel processes | stockfish, 18, 14, 2 |

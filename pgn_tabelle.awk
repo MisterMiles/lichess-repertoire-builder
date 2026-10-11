@@ -1,5 +1,5 @@
 # Wandelt eine PGN Datei in eine kompakte Tabelle (TSV) für repertoire.py.
-# Aufruf: awk -v plies=30 -f pgn_tabelle.awk datei.pgn > datei.tsv
+# Aufruf: awk -v plies=40 -f pgn_tabelle.awk datei.pgn > datei.tsv
 # Spalten: Site, White, Black, WhiteElo, BlackElo, Result, Termination,
 #          TimeControl, Date, Halbzüge gesamt, letzter Zug, erste N Halbzüge
 function val() { v = $0; sub(/^\[[A-Za-z]+ "/, "", v); sub(/"\]\r?$/, "", v); return v }
@@ -14,7 +14,7 @@ function flush() {
   print site "\t" w "\t" b "\t" we "\t" be "\t" r "\t" t "\t" tc "\t" dt "\t" k "\t" last "\t" out
   mv = ""; site = w = b = we = be = r = t = tc = dt = ""
 }
-BEGIN { if (plies == "") plies = 30 }
+BEGIN { if (plies == "") plies = 40 }
 /^\[Event / { flush(); inm = 0 }
 /^\[Site / { site = val() }
 /^\[White / { w = val() }

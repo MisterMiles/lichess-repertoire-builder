@@ -23,11 +23,11 @@
 #   --elo-einer N        mindestens ein Spieler ab N       (Standard 0, aus)
 #   --mit-bullet         Bullet und UltraBullet behalten   (Standard: ohne)
 #   --mit-bots           Bot Partien behalten              (Standard: ohne)
-#   --halbzuege N        Halbzüge in der Tabelle           (Standard 30)
+#   --halbzuege N        Halbzüge in der Tabelle           (Standard 40)
 
 set -o pipefail
 START=""; ENTH=""; ZFARBE="weiss"; BISZUG=5; NSTART=""; INPUT=""; MONAT=""; OUT=""; TSV=""
-ELO_MIN=1800; ELO_MAX=2499; ELO_EINER=0; BULLET=0; BOTS=0; PLIES=30
+ELO_MIN=1800; ELO_MAX=2499; ELO_EINER=0; BULLET=0; BOTS=0; PLIES=40
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 while [ $# -gt 0 ]; do
