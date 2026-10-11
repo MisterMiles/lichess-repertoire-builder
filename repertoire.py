@@ -25,6 +25,7 @@ STANDARD = {
     "fehler": True, "fehler_tiefe": 14, "fehler_grenze": 0.2, "fehler_min_anteil": 5,
     "fehler_min_partien": 10, "fehler_anzahl": 5,
     "strukturen_zug": 12, "strukturen_anzahl": 5, "strukturen_text": None,
+    "plan_zuege": 3, "plan_min_partien": 5,
 }
 
 # ---------------------------------------------------------------- Hilfen
@@ -457,23 +458,54 @@ def stockfish(cfg, aufgaben):
 
 # ---------------------------------------------------------------- Musterpartien
 def musterpartien(cfg, alle, ziele):
-    best = {}; maxp = cfg["bis_zug"] * 2
+    """Je Endstellung die Partie mit dem höchsten Elo Schnitt und die eigenen Folgezüge aller Partien
+    (für den typischen Aufbau aus der Praxis)."""
+    best = {}; folgen = collections.defaultdict(list)
+    maxp = cfg["bis_zug"] * 2; ich = cfg["ich"]; nplan = cfg["plan_zuege"]
     fs = Fortschritt("Musterpartien", len(alle))
     for f in alle:
         fs.schritt()
         try: schnitt = (int(f[3]) + int(f[4])) / 2
         except ValueError: continue
-        b = chess.Board()
+        pkt = {"1-0": 1.0, "0-1": 0.0, "1/2-1/2": 0.5}.get(f[5], 0.5)
+        if ich == chess.BLACK: pkt = 1 - pkt
+        b = chess.Board(); verlauf = []
         for z in f[11].split()[:maxp]:
-            try: b.push_san(z.rstrip("?!"))
+            try: mv = b.parse_san(z.rstrip("?!"))
             except ValueError: break
-            k = epd(b)
-            if k in ziele and (k not in best or schnitt > best[k][0]):
+            eigen = b.turn == ich; san = b.san(mv); nr = b.fullmove_number
+            b.push(mv); verlauf.append((epd(b), mv.uci(), san, eigen, nr))
+        for i, (k, _, _, _, _) in enumerate(verlauf):
+            if k not in ziele: continue
+            if k not in best or schnitt > best[k][0]:
                 d = f[8]; ort = f[0].replace("https://", "")
                 best[k] = (schnitt, f"{f[5]} ({(int(f[9]) + 1) // 2}) {f[1]} ({f[3]}) gegen {f[2]} ({f[4]}), Lichess {d[5:7]}.{d[:4]}, {ort}")
+            eigene = [(u, s, nr) for _, u, s, e, nr in verlauf[i + 1:] if e and "x" not in s][:nplan]   # Schlagzüge sind Reaktionen, kein Aufbau
+            if eigene: folgen[k].append((eigene, pkt))
     fs.fertig()
     print(f"  Musterpartien: {len(best)} von {len(ziele)} Endstellungen", flush=True)
-    return {k: v[1] for k, v in best.items()}
+    plaene = {}
+    for k, liste in folgen.items():
+        n = len(liste)
+        if n < cfg["plan_min_partien"]: continue
+        q0 = sum(p for _, p in liste) / n
+        zaehl = collections.defaultdict(lambda: [0, 0.0, 0, "", 0])   # Partien, Punkte, Summe Position, SAN, Zugnummer
+        for eigene, p in liste:
+            gesehen = set()
+            for pos, (u, s, nr) in enumerate(eigene):
+                if u in gesehen: continue
+                gesehen.add(u); z = zaehl[u]; z[0] += 1; z[1] += p; z[2] += pos; z[3] = s; z[4] = nr
+        kand = [(u, z) for u, z in zaehl.items() if z[0] >= 2 and z[0] / n >= 0.2]
+        kand.sort(key=lambda x: -(x[1][1] + 3 * q0) / (x[1][0] + 3))      # geglättete Quote, kleine Zahlen zählen weniger
+        wahl = []; felder = set()
+        for u, z in kand:                       # pro Feld nur ein Zug, z. B. nicht b5 und b6 oder Sc6 und c6 zugleich
+            if u[:2] in felder or u[2:4] in felder: continue    # auch nicht zwei Züge auf dasselbe Feld
+            felder.update((u[:2], u[2:4])); wahl.append((u, z))
+            if len(wahl) == nplan: break
+        wahl.sort(key=lambda x: x[1][2] / x[1][0])                         # in typischer Reihenfolge
+        if wahl: plaene[k] = {"n": n, "zuege": [(u, z[3]) for u, z in wahl]}
+    print(f"  Typischer Aufbau aus der Praxis: {len(plaene)} Endstellungen", flush=True)
+    return {k: v[1] for k, v in best.items()}, plaene
 
 # ---------------------------------------------------------------- PGN
 def winkel(cp):
@@ -514,6 +546,7 @@ def speichern(pfad, spiele):
 class Schreiber:
     def __init__(self, cfg, kapitel, sf, muster, fehler_karte):
         self.cfg, self.sf, self.muster, self.fk = cfg, sf, muster, fehler_karte
+        self.plaene = {}
         self.praefixe = [(c["pfad"] + [e["san"]], i) for i, c in enumerate(kapitel, 2) for e in c["eintraege"]]
         self.neben = collections.defaultdict(list)
         for f in fehler_karte.values(): self.neben[key(f["fb"])].append(f)
@@ -527,9 +560,14 @@ class Schreiber:
 
     def ende(self, node, fen, mit_partie=True):
         teile = []; r = self.sf.get(f"E{self.cfg['tiefe']}|" + key(fen))
+        plan = self.plaene.get(key(fen))
         if r and r["s"] is not None:
             node.nags.add(winkel(r["s"]))
-            if r["m"]: teile.append(pfeil(r["m"]))
+            if r["m"] and not plan: teile.append(pfeil(r["m"]))
+        if plan:
+            pf = ",".join(f"B{u[:2]}{u[2:4]}" for u, _ in plan["zuege"])
+            zuege = ", ".join(de(s, self.cfg) for _, s in plan["zuege"])
+            teile.append(f"[%cal {pf}] Typischer Aufbau aus der Praxis ({plan['n']} Partien): {zuege}.")
         if mit_partie and key(fen) in self.muster: teile.append(self.muster[key(fen)])
         return teile
 
@@ -629,10 +667,10 @@ def main():
     print("4/6 Fehler des Gegners und Musterpartien", flush=True)
     fehler_liste, fehler_karte = fehler_auswerten(cfg, kapitel, kandidaten, sf, daten) if cfg["fehler"] else ([[] for _ in kapitel], {})
     print(f"  {len(fehler_karte)} häufige Fehler gefunden", flush=True)
-    muster = musterpartien(cfg, daten["alle"], {key(f) for f in fens})
+    muster, plaene = musterpartien(cfg, daten["alle"], {key(f) for f in fens})
 
     print("5/6 Repertoire schreiben", flush=True)
-    w = Schreiber(cfg, kapitel, sf, muster, fehler_karte)
+    w = Schreiber(cfg, kapitel, sf, muster, fehler_karte); w.plaene = plaene
     gegner = seite(not ich)
     info = (f"{cfg['titel']}. Repertoire für {seite(ich)}, Startzüge {de(cfg['start'], cfg)}. "
             f"Daten: {daten['n_ges']} Lichess Partien, davon {daten['n_pool']} ausgewertet. "
@@ -645,7 +683,7 @@ def main():
             f"{zahl(cfg['fehler_grenze'])} Gewinnchancen kostet (Skala von minus 1 bis plus 1 wie bei Lichess, in ausgeglichenen Stellungen etwa ein Bauer). "
             f"? Fehler, ?? grober Fehler, dazu die Widerlegung. "
             f"AM LINIENENDE: Bewertung von Stockfish (Tiefe {cfg['tiefe']}, aus Sicht von Weiß): = ausgeglichen, ⩲ oder ⩱ leichter Vorteil, "
-            f"± oder ∓ klarer Vorteil, +- oder -+ entscheidender Vorteil. Grüner Pfeil = bester Zug. "
+            f"± oder ∓ klarer Vorteil, +- oder -+ entscheidender Vorteil. Blaue Pfeile = typischer Aufbau aus der Praxis: die nächsten {cfg['plan_zuege']} eigenen Züge ohne Schlagzüge, in typischer Reihenfolge, mit denen {seite(ich)} nach dieser Stellung am besten gepunktet hat (mindestens {cfg['plan_min_partien']} Partien). Gibt es dafür zu wenige Partien, zeigt ein grüner Pfeil den besten Zug laut Stockfish. "
             f"Musterpartie = Lichess Partie mit dem höchsten Elo Schnitt, die die Stellung erreicht hat.")
     spiele = []
     g = neues_spiel(cfg, "01 Intro"); g.comment = info

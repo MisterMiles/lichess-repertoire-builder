@@ -46,7 +46,7 @@ Züge schreibst du in englischer Notation: N Springer, B Läufer, R Turm, Q Dame
 ## Was du bekommst
 
 Einen Ordner mit dem Namen deines Repertoires, darin:
-- **`….pgn`**: dein Repertoire, nach Hauptvariante und Abweichungen in Kapitel geteilt. Im Kapitelnamen steht, wie oft du die Linie in der Praxis bekommst. Am Linienende stehen Stockfish Bewertung und eine Musterpartie, am Kapitelende die häufigsten Fehler deiner Gegner samt Widerlegung. Dazu kommen die typischen Bauernstrukturen.
+- **`….pgn`**: dein Repertoire, nach Hauptvariante und Abweichungen in Kapitel geteilt. Im Kapitelnamen steht, wie oft du die Linie in der Praxis bekommst. Am Linienende stehen Stockfish Bewertung, eine Musterpartie und blaue Pfeile für den Aufbau, der in der Praxis am besten gepunktet hat, am Kapitelende die häufigsten Fehler deiner Gegner samt Widerlegung. Dazu kommen die typischen Bauernstrukturen.
 - **`…_quickstart.pgn`**: die 15 wahrscheinlichsten Linien bis Zug 14, ideal zum Üben.
 
 ## Gut zu wissen

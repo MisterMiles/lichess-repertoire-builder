@@ -127,6 +127,7 @@ Eine JSON Datei je Repertoire, Vorlagen: `beispiel_weiss.json`, `beispiel_schwar
 | `fehler` | häufige Fehler des Gegners je Kapitel suchen | an |
 | `fehler_grenze` | Verlust auf der Gewinnchancen Skala, ab dem ein Zug als Fehler zählt (0,2 ist die Lichess Grenze für „Fehler“, in ausgeglichenen Stellungen etwa ein Bauer) | 0,2 |
 | `fehler_min_partien`, `fehler_min_anteil`, `fehler_anzahl` | ein Zug wird nur geprüft ab so vielen Partien und so viel Prozent, gezeigt werden die häufigsten | 10, 5 %, 5 |
+| `plan_zuege`, `plan_min_partien` | eigene Züge, die am Linienende als typischer Aufbau aus der Praxis gezeigt werden, und die Mindestzahl an Partien dafür | 3, 5 |
 | `strukturen_zug`, `strukturen_anzahl` | Zeitpunkt und Zahl der Bauernstrukturen | Zug 12, 5 |
 | `strukturen_text` | JSON Datei mit eigenen Erklärungen je Struktur (`{"id": "Text"}`, die ids stehen in `<ausgabe>_strukturen.json`) | keine |
 | `stockfish`, `tiefe`, `fehler_tiefe`, `prozesse` | Pfad zur Engine, Suchtiefe am Linienende und bei der Fehlersuche, parallele Prozesse | stockfish, 18, 14, 2 |
@@ -164,7 +165,7 @@ Richtwerte für etwa 190.000 Partien auf einem Rechner mit 2 Prozessen: Daten la
 - Weitere Teile: Abweichungen des Gegners von spät nach früh, große Kapitel nach dem nächsten Zug geteilt.
 - Im Kapitelnamen steht, wie viel Prozent aller ausgewerteten Partien das Kapitel erreichen, z. B. `(4,2 % gesamt)`.
 - Hauptvariante ist der meistgespielte Zug, der eigene Repertoirezug steht markiert daneben.
-- Am Linienende: Bewertungszeichen von Stockfish, grüner Pfeil für den besten Zug, Musterpartie mit dem höchsten Elo Schnitt.
+- Am Linienende: Bewertungszeichen von Stockfish, Musterpartie mit dem höchsten Elo Schnitt und blaue Pfeile für den typischen Aufbau aus der Praxis: die nächsten 3 eigenen Züge (ohne Schlagzüge), mit denen deine Seite nach dieser Stellung am besten gepunktet hat, ab 5 Partien. Bei weniger Partien zeigt ein grüner Pfeil stattdessen den besten Zug laut Stockfish.
 - Am Ende jedes Kapitels: die häufigsten Fehler des Gegners. Ein Zug zählt als Fehler, wenn er laut Stockfish mindestens `fehler_grenze` Gewinnchancen kostet. Zu jedem Fehler stehen die Bewertung vorher und nachher und die Erfolgsquote nach diesem Zug im Vergleich zu den übrigen Zügen derselben Stellung. Im Baum ist der Zug mit ? oder ?? markiert, dazu die Widerlegung.
 - Bauernstrukturen: die häufigsten Zentrumsstrukturen (Linien c bis f) nach Zug 12 mit Beispielstellung, Anteil, Erfolgsquote, Rochaden, typischen Feldern der Leichtfiguren und den häufigsten Bauernhebeln.
 - Anhang mit Themenkapiteln, am Ende eine Zusammenfassung bis Zug 5.

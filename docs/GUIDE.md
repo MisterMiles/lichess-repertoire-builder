@@ -129,6 +129,7 @@ One JSON file per repertoire, templates: `beispiel_weiss.json` (White), `beispie
 | `fehler` | look for frequent opponent mistakes per chapter | on |
 | `fehler_grenze` | loss on the winning chances scale from which a move counts as a mistake (0.2 is the Lichess threshold for "mistake", about one pawn in a balanced position) | 0.2 |
 | `fehler_min_partien`, `fehler_min_anteil`, `fehler_anzahl` | a move is checked only with at least this many games and this share, the most frequent ones are shown | 10, 5 %, 5 |
+| `plan_zuege`, `plan_min_partien` | own moves shown as the typical setup from practice at each line end, and the minimum number of games for it | 3, 5 |
 | `strukturen_zug`, `strukturen_anzahl` | move and number of pawn structures | move 12, 5 |
 | `strukturen_text` | JSON file with your own explanation per structure (`{"id": "text"}`, the ids are listed in `<output>_strukturen.json`) | none |
 | `stockfish`, `tiefe`, `fehler_tiefe`, `prozesse` | engine path, search depth at line ends and for the mistake search, parallel processes | stockfish, 18, 14, 2 |
@@ -166,7 +167,7 @@ Rough values for about 190,000 games with 2 processes: loading 10 minutes, Stock
 - Further parts: opponent deviations from late to early, large chapters split by the next move.
 - The chapter name shows the share of all evaluated games that reach the chapter, e.g. `(4,2 % gesamt)`.
 - The main line is the most played move, your repertoire move is marked next to it.
-- Line ends: Stockfish evaluation symbol, green arrow for the best move, model game with the highest average rating.
+- Line ends: Stockfish evaluation symbol, model game with the highest average rating and blue arrows for the typical setup from practice: your next 3 own moves (captures left out) that scored best after this position, at least 5 games. With fewer games a green arrow shows Stockfish's best move instead.
 - End of each chapter: the opponent's most frequent mistakes. A move counts as a mistake if it loses at least `fehler_grenze` winning chances according to Stockfish. Each mistake shows the evaluation before and after and your score after this move compared with the other moves in the same position. In the tree the move is marked ? or ??, together with the refutation.
 - Pawn structures: the most frequent central structures (files c to f) after move 12 with an example position, share, score, castling sides, typical squares of your minor pieces and the most frequent pawn breaks.
 - Appendix with theme chapters, a summary up to move 5 at the end.
