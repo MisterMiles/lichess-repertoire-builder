@@ -14,6 +14,8 @@ Ausgaben:
 import sys, os, json, re, math, time, collections, datetime
 from multiprocessing import Pool
 import chess, chess.pgn, chess.engine
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import strukturen as strukturmodul
 
 STANDARD = {
     "farbe": "weiss", "erste_antworten": 10, "antworten": 3, "fruehe_zuege_ab_5_prozent": [2, 3],
@@ -798,19 +800,10 @@ def main():
         spiele.append(g)
     nr = len(kapitel) + 2
     texte = json.load(open(cfg["strukturen_text"], encoding="utf-8")) if cfg.get("strukturen_text") and os.path.exists(cfg["strukturen_text"]) else {}
-    for j, s in enumerate(strukturen, 1):
-        g = neues_spiel(cfg, f"{nr:02d} Struktur {j}: {zentrum(s['id'])}", fen=s["beispiel"] + f" 0 {cfg['strukturen_zug'] + 1}")
-        txt = (f"BAUERNSTRUKTUR im Zentrum (Linien c bis f) nach Zug {cfg['strukturen_zug']}: {zentrum(s['id'])}. Die Stellung zeigt die häufigste Partie mit dieser Struktur. "
-               f"Kommt in {zahl(s['anteil'])} % der Partien vor, die Zug {cfg['strukturen_zug']} erreichen ({s['n']} Partien), "
-               f"{seite(ich)} punktet {zahl(s['quote'], 0)} %. "
-               "Rochaden (Weiß/Schwarz): " + ", ".join(f"{r} {zahl(p, 0)} %" for r, p in s["rochade"]) + ". "
-               "Typische Felder deiner Leichtfiguren: " + ", ".join(f"{f} {zahl(p, 0)} %" for f, p in s["figuren"]) + ". ")
-        if s["hebel"]:
-            txt += "Häufigste Bauernhebel in den nächsten drei Zügen: " + ", ".join(
-                f"{'Weiß' if x[0] == 'W' else 'Schwarz'} {de(x[2:], cfg)} ({zahl(a, 0)} % der Partien, {seite(ich)} punktet danach {zahl(q, 0)} %)"
-                for x, a, q in s["hebel"]) + ". "
-        if s["id"] in texte: txt += "IDEEN: " + texte[s["id"]]
-        g.comment = txt; spiele.append(g); nr += 1
+    vergeben = set()
+    for s in strukturen:
+        g, s["name"], s["merkmale"] = strukturmodul.kapitel(s, nr, cfg, ich, neues_spiel, de, zahl, seite, texte, vergeben)
+        spiele.append(g); nr += 1
     for p in cfg["anhang_pgn"]:
         h = open(p, encoding="utf-8-sig")
         while True:
@@ -844,7 +837,7 @@ def main():
                 if r["m"]: n.comment = (n.comment + " " + pfeil(r["m"])).strip()
         q.append(g)
     speichern(cfg["basis"] + "_quickstart.pgn", q)
-    json.dump([{"id": s["id"], "zentrum": zentrum(s["id"]), "beispiel_fen": s["beispiel"], "partien": s["n"],
+    json.dump([{"id": s["id"], "name": s.get("name"), "zentrum": zentrum(s["id"]), "merkmale": s.get("merkmale", []), "beispiel_fen": s["beispiel"], "partien": s["n"],
                 "anteil_prozent": round(s["anteil"], 1), "quote_prozent": round(s["quote"], 1), "rochaden": s["rochade"],
                 "figuren": s["figuren"], "hebel": s["hebel"], "text": texte.get(s["id"], "")} for s in strukturen],
               open(cfg["basis"] + "_strukturen.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
