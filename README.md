@@ -21,8 +21,11 @@ Always needed:
 
 ```bash
 brew install zstd pv mawk stockfish
-python3 -m pip install chess
+python3 -m venv ~/.venv-repertoire
+~/.venv-repertoire/bin/pip install chess
 ```
+
+Homebrew's Python blocks `pip install` into the system as well, hence the virtual environment. Run the script with `~/.venv-repertoire/bin/python repertoire.py ...`.
 
 ### Linux (Debian, Ubuntu)
 
