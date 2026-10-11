@@ -65,6 +65,7 @@ bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
 | `--elo FROM-TO` | rating range of both players | 1800-2499 |
 | `--monat YYYY-MM` | Lichess month, several as `YYYY-MM..YYYY-MM` | last full month |
 | `--monate N` | the last N full months | off |
+| `--bank FOLDER` | game bank: every month is turned once into a table of all games (no bullet, no bots, about 5 GB per month). Further analyses only search in it, a few seconds per month. With `--archiv` the bank is built from the stored monthly files, otherwise streamed | off |
 | `--archiv FOLDER` | keep the monthly files there instead of only streaming (about 29 GB each), existing ones are reused | off |
 | `--datei FILE` | your own Lichess file (`.pgn` or `.pgn.zst`) instead of the download | off |
 | `--name NAME` | folder name for the results | from colour and moves |
@@ -75,6 +76,23 @@ bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
 Running it again with the same arguments reuses the games and the Stockfish results. For fine tuning, edit `konfiguration.json` in the folder (keys below) and run again.
 
 The sections below describe the single steps for full control.
+
+## Game bank for many analyses
+
+`partienbank.sh` turns Lichess months once into compact tables of all games, without bullet and bots, with every opening and rating range and the first 40 half moves. `repertoire.sh --bank FOLDER` calls it automatically and afterwards only searches the bank.
+
+```bash
+bash partienbank.sh ~/partienbank 2026-07 2026-08 2026-09
+bash partienbank.sh ~/partienbank 2026-09 --archiv ~/lichess    # from stored monthly files
+```
+
+| Option | Meaning | Default |
+|---|---|---|
+| `--archiv FOLDER` | read monthly files from there, download missing ones into it | stream |
+| `--mit-bullet` | include bullet games | without |
+| `--teile N` | parallel processes | CPU cores minus one, at most 8 |
+
+Measured on a 2 GB slice of September 2026: 63 % of the games remain (no bullet, no bots), the bank is about 2.4 % of the unpacked PGN. Extrapolated that is roughly 5 GB per month instead of 29 GB, and searching for starting moves then takes under a minute per month instead of about 8 minutes.
 
 ## 1. Filter games
 

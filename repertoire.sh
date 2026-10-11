@@ -11,6 +11,9 @@
 #   --monate N        die letzten N vollen Monate, z. B. --monate 3
 #   --archiv ORDNER   Monatsdateien dort speichern statt nur streamen (je etwa 29 GB).
 #                     Schon vorhandene Dateien werden genutzt statt neu geladen.
+#   --bank ORDNER     Partienbank: jeder Monat wird einmal in eine kompakte Tabelle aller
+#                     Partien umgewandelt (etwa 5 GB pro Monat). Danach dauert jede weitere
+#                     Analyse mit beliebigen Startzügen und Elo nur Sekunden pro Monat.
 #   --datei DATEI     eigene Lichess Datei (.pgn oder .pgn.zst) statt Download
 #   --name NAME       Name des Ordners für die Ergebnisse     (Standard aus Farbe und Zügen)
 #   --repertoire PGN  eigenes Repertoire, dessen Züge markiert werden
@@ -24,17 +27,18 @@
 
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-hilfe() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; }
+hilfe() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; }
 
 [ $# -lt 2 ] && { hilfe; exit 1; }
-FARBE="$1"; START="$2"; shift 2
-ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; DATEI=""; NAME=""; REP=""; SCHNELL=""; NOTATION="en"
+FARBE="$1"; START=$(printf '%s' "$2" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g'); shift 2
+ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; BANK=""; DATEI=""; NAME=""; REP=""; SCHNELL=""; NOTATION="en"
 while [ $# -gt 0 ]; do
   case "$1" in
     --elo) ELO="$2"; shift 2;;
     --monat) MONAT="$2"; shift 2;;
     --monate) ANZAHL="$2"; shift 2;;
     --archiv) ARCHIV="$2"; shift 2;;
+    --bank) BANK="$2"; shift 2;;
     --datei) DATEI="$2"; shift 2;;
     --name) NAME="$2"; shift 2;;
     --repertoire) REP="$2"; shift 2;;
@@ -127,9 +131,30 @@ PYEOF
   ) || { echo "Monat bitte als JJJJ-MM, JJJJ-MM..JJJJ-MM oder mit --monate N angeben"; exit 1; }
   set -- $MONATE; echo "Monate: $* ($# insgesamt)"
   mkdir -p "$OUT/monate"; [ -n "$ARCHIV" ] && mkdir -p "$ARCHIV"
+  # Startzüge ohne Zugnummern, so wie sie in der Tabelle stehen
+  AWK=awk; command -v gawk >/dev/null 2>&1 && AWK=gawk; command -v mawk >/dev/null 2>&1 && AWK=mawk
+  STARTZ=$(printf '%s' "$START" | sed -E 's/[0-9]+\.+ ?/ /g' | tr -s ' ' | sed -E 's/^ //; s/ $//')
+  if [ -n "$BANK" ]; then
+    BANKARGS=(); [ -n "$ARCHIV" ] && BANKARGS=(--archiv "$ARCHIV")
+    bash "$DIR/partienbank.sh" "$BANK" $MONATE "${BANKARGS[@]}"
+  fi
   for M in $MONATE; do
-    ZIEL="$OUT/monate/partien_$M"
+    ZIEL="$OUT/monate/partien_${M}_elo${ELO_MIN}-${ELO_MAX}"
+    ALT="$OUT/monate/partien_$M"      # Name aus früheren Versionen, immer mit Elo 1800-2499
+    if [ ! -s "$ZIEL.tsv" ] && [ -s "$ALT.tsv" ] && [ "$ELO_MIN-$ELO_MAX" = "1800-2499" ]; then
+      mv "$ALT.tsv" "$ZIEL.tsv"; [ -f "$ALT.pgn" ] && mv "$ALT.pgn" "$ZIEL.pgn"
+    fi
     if [ -s "$ZIEL.tsv" ]; then echo "$M: schon gefiltert, wird wiederverwendet."; continue; fi
+    if [ -n "$BANK" ]; then
+      echo "$M: suche in der Partienbank"
+      zstd -dc "$BANK/lichess_$M.tsv.zst" | LC_ALL=C "$AWK" -F'\t' -v start="$STARTZ" -v emin="$ELO_MIN" -v emax="$ELO_MAX" '
+        BEGIN { s = start " "; L = length(s) }
+        substr($12 " ", 1, L) == s { a = $4 + 0; b = $5 + 0; lo = (a < b ? a : b); hi = (a < b ? b : a)
+                                     if (lo >= emin && hi <= emax) print }' > "$ZIEL.tsv.tmp"
+      mv "$ZIEL.tsv.tmp" "$ZIEL.tsv"
+      echo "$M: $(wc -l < "$ZIEL.tsv" | tr -d ' ') Partien"
+      continue
+    fi
     URL="https://database.lichess.org/standard/lichess_db_standard_rated_${M}.pgn.zst"
     if [ -n "$ARCHIV" ]; then
       F="$ARCHIV/lichess_db_standard_rated_${M}.pgn.zst"
@@ -145,7 +170,7 @@ PYEOF
     fi
   done
   # Tabelle aus allen gewünschten Monaten neu zusammensetzen
-  for M in $MONATE; do cat "$OUT/monate/partien_$M.tsv"; done > "$OUT/partien.tsv.tmp" && mv "$OUT/partien.tsv.tmp" "$OUT/partien.tsv"
+  for M in $MONATE; do cat "$OUT/monate/partien_${M}_elo${ELO_MIN}-${ELO_MAX}.tsv"; done > "$OUT/partien.tsv.tmp" && mv "$OUT/partien.tsv.tmp" "$OUT/partien.tsv"
   echo "Zusammen: $(wc -l < "$OUT/partien.tsv" | tr -d ' ') Partien aus $# Monaten"
 fi
 

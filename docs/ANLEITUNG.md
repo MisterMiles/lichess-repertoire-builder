@@ -63,6 +63,7 @@ bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
 | `--elo VON-BIS` | Elo Bereich beider Spieler | 1800-2499 |
 | `--monat JJJJ-MM` | Lichess Monat, mehrere als `JJJJ-MM..JJJJ-MM` | letzter voller Monat |
 | `--monate N` | die letzten N vollen Monate | aus |
+| `--bank ORDNER` | Partienbank: jeder Monat wird einmal in eine Tabelle aller Partien umgewandelt (ohne Bullet und Bots, etwa 5 GB pro Monat). Weitere Analysen suchen nur noch darin, wenige Sekunden pro Monat. Mit `--archiv` wird aus den gespeicherten Monatsdateien gebaut, sonst gestreamt | aus |
 | `--archiv ORDNER` | Monatsdateien dort speichern statt nur streamen (je etwa 29 GB), vorhandene werden wiederverwendet | aus |
 | `--datei DATEI` | eigene Lichess Datei (`.pgn` oder `.pgn.zst`) statt Download | aus |
 | `--name NAME` | Ordnername für die Ergebnisse | aus Farbe und Zügen |
@@ -73,6 +74,23 @@ bash repertoire.sh schwarz "1. d4 d5" --elo 1600-2000 --schnell
 Ein erneuter Aufruf mit gleichen Angaben nutzt die schon geladenen Partien und Stockfish Ergebnisse. Für Feineinstellungen `konfiguration.json` im Ordner bearbeiten (Felder siehe unten) und erneut starten.
 
 Die folgenden Abschnitte beschreiben die einzelnen Schritte für volle Kontrolle.
+
+## Partienbank für viele Analysen
+
+`partienbank.sh` wandelt Lichess Monate einmalig in kompakte Tabellen aller Partien um, ohne Bullet und Bots, mit allen Eröffnungen und Elo Bereichen und den ersten 40 Halbzügen. `repertoire.sh --bank ORDNER` ruft es automatisch auf und sucht danach nur noch in der Bank.
+
+```bash
+bash partienbank.sh ~/partienbank 2026-07 2026-08 2026-09
+bash partienbank.sh ~/partienbank 2026-09 --archiv ~/lichess    # aus gespeicherten Monatsdateien
+```
+
+| Option | Bedeutung | Standard |
+|---|---|---|
+| `--archiv ORDNER` | Monatsdateien von dort lesen, fehlende dorthin laden | streamen |
+| `--mit-bullet` | Bullet Partien mit aufnehmen | ohne |
+| `--teile N` | parallele Prozesse | CPU Kerne minus eins, höchstens 8 |
+
+Gemessen an einem 2 GB Ausschnitt aus September 2026: 63 % der Partien bleiben übrig (ohne Bullet und Bots), die Bank ist etwa 2,4 % so groß wie die entpackte PGN. Hochgerechnet sind das rund 5 GB pro Monat statt 29 GB, die Suche nach Startzügen dauert dann unter einer Minute pro Monat statt rund 8 Minuten.
 
 ## 1. Partien filtern
 

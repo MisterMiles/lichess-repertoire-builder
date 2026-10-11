@@ -56,6 +56,7 @@ Einen Ordner mit dem Namen deines Repertoires, darin:
 
 - **Dauer:** Die Partien eines Lichess Monats werden aus dem Internet gestreamt (etwa 29 GB, nichts davon wird gespeichert). Das dauert je nach Leitung 30 Minuten bis einige Stunden. Danach rechnet Stockfish 15 bis 60 Minuten. Mit `--schnell` siehst du das Ergebnis in wenigen Minuten, sobald die Partien da sind.
 - **Mehr Partien:** `--monate 3` nimmt die letzten drei vollen Monate, `--monat 2026-07..2026-09` einen festen Zeitraum. Jeder Monat wird einzeln geladen und gefiltert, die Wartezeit wächst also mit. Mit `--archiv ORDNER` bleiben die Monatsdateien gespeichert (je etwa 29 GB) und werden beim nächsten Mal nicht neu geladen.
+- **Mehrere Analysen:** Mit `--bank ORDNER` wird jeder Monat einmal in eine Partienbank umgewandelt, eine kompakte Tabelle aller Partien (etwa 5 GB pro Monat). Danach braucht jede weitere Analyse mit anderen Startzügen, anderer Farbe oder anderem Elo Bereich nur noch Sekunden pro Monat, bevor Stockfish startet. Beispiel: `bash repertoire.sh weiss "1. e4" --monate 3 --bank ~/partienbank`
 - **Nochmal starten:** Mit den gleichen Angaben nutzt das Skript die schon geladenen Partien und rechnet nur, was fehlt.
 - **Linux:** Statt Homebrew `sudo apt install python3-venv zstd pv mawk stockfish`, der Rest ist gleich.
 - **Mehr Einstellungen:** Elo, Monat, eigenes Repertoire und alle Feineinstellungen stehen in der [ausführlichen Anleitung](docs/ANLEITUNG.md).
