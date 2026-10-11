@@ -154,6 +154,7 @@ else
 fi
 
 if [ -n "$TSV" ]; then
-  LC_ALL=C "$AWK" -v plies="$PLIES" -f "$DIR/pgn_tabelle.awk" "$OUT" > "$TSV.tmp" && mv "$TSV.tmp" "$TSV"
+  # gleiche Tabelle wie in der Partienbank; gefiltert ist schon, deshalb Bullet und Bots hier nicht nochmal aussortieren
+  LC_ALL=C "$AWK" -v plies="$PLIES" -v bullet=1 -v bots=1 -f "$DIR/gamebank.awk" "$OUT" > "$TSV.tmp" && mv "$TSV.tmp" "$TSV"
   echo "Tabelle: $TSV ($(wc -l < "$TSV" | tr -d ' ') Partien)" >&2
 fi

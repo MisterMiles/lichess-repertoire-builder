@@ -12,7 +12,7 @@ wie repertoire.py), also nur Züge, die man selbst auch spielt.
 """
 import sys, collections, chess
 sys.path.insert(0, __import__("os").path.dirname(__file__))
-from repertoire import lade_config, lade_partien, lade_repertoire, Baum, Fortschritt, zugfolge, zahl
+from repertoire import lade_config, lade_partien, lade_repertoire, Baum, Fortschritt, zugfolge, zahl, tk, tk_fen
 
 def main():
     if len(sys.argv) < 3: print(__doc__); sys.exit(1)
@@ -24,7 +24,7 @@ def main():
     L = len(cfg["start_san"]); erste = L if b.turn != cfg["ich"] else L + 1
     baum = Baum(cfg, daten, rep); baum.seen[b.epd()] = list(cfg["start_san"])
     baum.daten(b, list(cfg["start_san"]), erste)
-    ziel = set(baum.knoten_von)
+    ziel = {tk_fen(d["fa"]) for d in baum.knoten_von.values()}
     print(f"  {len(ziel)} Stellungen im Repertoire", flush=True)
     zeilen = sum(1 for _ in open(sys.argv[2], encoding="utf-8"))
     fs = Fortschritt("Andere Partien", zeilen)
@@ -40,7 +40,7 @@ def main():
             try: b.push_san(z.rstrip("?!"))
             except ValueError: break
             zuege.append(z.rstrip("?!"))
-            if b.epd() in ziel:
+            if tk(b) in ziel:
                 treffer += 1; folgen[" ".join(zuege)] += 1
                 break
     fs.fertig()

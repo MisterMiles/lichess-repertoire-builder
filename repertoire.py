@@ -11,7 +11,8 @@ Ausgaben:
   <ausgabe>_strukturen.json   Strukturen mit Zahlen, Grundlage für eigene Erklärungstexte
   <ausgabe>_stockfish.json    Zwischenspeicher der Engine, ein zweiter Lauf rechnet nur Neues
 """
-import sys, os, json, re, math, time, collections, datetime
+import sys, os, json, re, math, time, collections, datetime, functools
+from array import array
 from multiprocessing import Pool
 import chess, chess.pgn, chess.engine
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -49,6 +50,18 @@ def lade_config(pfad):
 
 def epd(b): return b.epd()
 def key(fen): return " ".join(fen.split()[:4])
+
+# Schnelle Stellungsschlüssel für die großen Zählungen. board.epd() kostet rund 100 µs, der Hash der
+# internen Stellungsdaten nur einen Bruchteil davon. Die Hashes leben nur im Speicher, gespeichert
+# (Stockfish Zwischenspeicher, PGN) werden weiter EPD Texte.
+def tk(b): return hash(b._transposition_key())
+def hk(ply, h): return hash((ply, h))
+@functools.lru_cache(maxsize=None)
+def tk_fen(fen): return tk(chess.Board(fen))
+def hk_fen(ply, fen): return hk(ply, tk_fen(fen))
+
+def zug_code(mv): return mv.from_square | mv.to_square << 6 | (mv.promotion or 0) << 12
+def zug_aus_code(c): return chess.Move(c & 63, c >> 6 & 63, (c >> 12) or None)
 def de(s, cfg): return s.translate(str.maketrans("NBRQ", "SLTD")) if cfg["notation"] == "de" else s
 def zahl(x, st=1): return f"{x:.{st}f}".replace(".", ",")
 def ev(cp): return ("+" if cp > 0 else "") + zahl(cp / 100, 2)
@@ -97,14 +110,18 @@ class Fortschritt:
 
 # ---------------------------------------------------------------- Daten
 def lade_partien(cfg):
+    """Liest die Partientabelle. Jede Partie wird genau einmal nachgespielt, ihre Stellungen (als Hash)
+    und Züge (als Zahl) werden kompakt gespeichert. Gezählt wird danach nur, was mindestens
+    min_zaehlen Partien erreichen: seltenere Stellungen nutzt keine Auswertung, sie würden bei
+    mehreren Monaten aber viele GB Speicher belegen."""
     start = cfg["start_san"]; L = len(start); maxp = cfg["bis_zug"] * 2
     ich = cfg["ich"]; regeln = cfg["system"]; ohne = set(cfg["ohne_systemfilter"])
     S = cfg["strukturen_zug"] * 2
-    zaehler = collections.defaultdict(collections.Counter)
-    punkte = collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0.0]))
-    erreicht = collections.Counter()
-    strukturen = []
-    alle = []; n_sys = n_ges = n_pool = 0
+    tiefe = max(maxp, S + 6, maxp + 2 * cfg["plan_zuege"])        # so weit wird jede Partie nachgespielt
+    strukturen = []; spiele = []; pool = []
+    n_sys = n_ges = n_pool = 0
+    zugcache = {}                                                   # (Stellung, SAN) -> Zug, für die häufigen frühen Stellungen
+    M = (1 << 24) - 1; skizze = array("I", bytes(4 * (M + 1)))      # grobe Zählung, überschätzt nie zu wenig
     zeilen = sum(1 for _ in open(cfg["daten"], encoding="utf-8"))
     fs = Fortschritt("Partien laden", zeilen)
     for zeile in open(cfg["daten"], encoding="utf-8"):
@@ -113,7 +130,7 @@ def lade_partien(cfg):
         if len(f) < 12 or f[5] not in ("1-0", "0-1", "1/2-1/2"): continue
         zuege = [t.rstrip("?!") for t in f[11].split()]
         if zuege[:L] != start: continue
-        n_ges += 1; alle.append(f)
+        n_ges += 1
         ok = True
         for r in regeln:
             treffer = False
@@ -126,35 +143,63 @@ def lade_partien(cfg):
                     break
             ok = ok and treffer
         erste = next((zuege[i] for i in range(L, len(zuege)) if (i % 2 == 0) != (ich == chess.WHITE)), None)
-        if not ok and erste not in ohne: continue
+        im_pool = ok or erste in ohne
+        # Nachspielen: hs[p] = Stellung nach p Halbzügen, zc[p] = Zug p+1
+        b = chess.Board(); h = tk(b); hs = array("q", [h]); zc = array("H"); struktur = None; hebel = set()
+        for p, z in enumerate(zuege[:tiefe]):
+            if p == S and im_pool: struktur = strukturdaten(b, ich, h)
+            mv = zugcache.get((h, z)) if p < 16 else None
+            if mv is None:
+                try: mv = b.parse_san(z)
+                except ValueError: break
+                if p < 16: zugcache[(h, z)] = mv
+            if struktur and S <= p < S + 6 and b.piece_type_at(mv.from_square) == chess.PAWN:
+                if hebel_zug(b, mv): hebel.add(("W" if b.turn == chess.WHITE else "S") + ":" + b.san(mv))
+            b.push(mv); h = tk(b); hs.append(h); zc.append(zug_code(mv))
+        else:
+            if len(zc) == S and im_pool: struktur = strukturdaten(b, ich, h)
+        spiele.append((f, hs, zc))
+        if not im_pool: continue
         n_sys += ok; n_pool += 1
         pkt = {"1-0": 1.0, "0-1": 0.0, "1/2-1/2": 0.5}[f[5]]
         if ich == chess.BLACK: pkt = 1 - pkt
-        b = chess.Board(); struktur = None; hebel = set()
-        for p, z in enumerate(zuege[:max(maxp, S + 6)]):
-            k = epd(b) if L <= p <= maxp else None
-            if k: erreicht[(p, k)] += 1
-            if p == S: struktur = strukturdaten(b, ich)
-            try: mv = b.parse_san(z)
-            except ValueError: break
-            if k and p < maxp:
-                s = z; zaehler[(p, k)][s] += 1   # Lichess schreibt Standard SAN
-                x = punkte[(p, k)][s]; x[0] += 1; x[1] += pkt
-            if struktur and S <= p < S + 6 and b.piece_type_at(mv.from_square) == chess.PAWN:
-                if hebel_zug(b, mv): hebel.add(("W" if b.turn == chess.WHITE else "S") + ":" + b.san(mv))
-            b.push(mv)
-        else:
-            p = len(zuege[:max(maxp, S + 6)])
-            if L <= p <= maxp: erreicht[(p, epd(b))] += 1
-            if p == S: struktur = strukturdaten(b, ich)
+        pool.append((len(spiele) - 1, pkt))
+        for p in range(L, min(len(hs) - 1, maxp) + 1): skizze[hk(p, hs[p]) & M] += 1
         if struktur: strukturen.append((struktur, tuple(sorted(hebel)), pkt))
     fs.fertig()
-    daten_bis = [f[8] for f in alle if re.fullmatch(r"\d{4}\.\d{2}\.\d{2}", f[8])]
+    # Zweiter Durchgang: genau zählen, aber nur Stellungen, die laut Skizze oft genug vorkommen
+    grenze = min(cfg["verlaengern_min_partien"], cfg["min_partien"], cfg["fehler_min_partien"])
+    zaehler = collections.defaultdict(collections.Counter)
+    punkte = collections.defaultdict(lambda: collections.defaultdict(lambda: [0, 0.0]))
+    erreicht = collections.Counter()
+    for i, pkt in pool:
+        f, hs, zc = spiele[i]; zuege = f[11].split()
+        for p in range(L, min(len(hs) - 1, maxp) + 1):
+            k = hk(p, hs[p])
+            if skizze[k & M] < grenze: continue
+            erreicht[k] += 1
+            if p < maxp and p < len(zc):
+                s = zuege[p].rstrip("?!"); zaehler[k][s] += 1   # Lichess schreibt Standard SAN
+                x = punkte[k][s]; x[0] += 1; x[1] += pkt
+    del skizze
+    daten_bis = [f[8] for f, _, _ in spiele if re.fullmatch(r"\d{4}\.\d{2}\.\d{2}", f[8])]
     von, bis = (min(daten_bis), max(daten_bis)) if daten_bis else ("", "")
     print(f"  Partien mit Startzügen: {n_ges}, davon mit Systemregel: {n_sys}, ausgewertet: {n_pool}"
           + (f", Zeitraum {von} bis {bis}" if von else ""), flush=True)
-    return {"zaehler": zaehler, "punkte": punkte, "erreicht": erreicht, "alle": alle, "strukturen": strukturen,
-            "n_ges": n_ges, "n_sys": n_sys, "n_pool": n_pool, "von": von, "bis": bis}
+    return {"zaehler": zaehler, "punkte": punkte, "erreicht": erreicht, "spiele": spiele, "pool": pool,
+            "strukturen": strukturen, "n_ges": n_ges, "n_sys": n_sys, "n_pool": n_pool, "von": von, "bis": bis}
+
+def erreicht_genau(daten, schluessel):
+    """Exakte Zahl der ausgewerteten Partien je (Halbzug, Stellung), auch für seltene Stellungen."""
+    fehlt = {(p, h) for p, h in schluessel if hk(p, h) not in daten["erreicht"]}
+    if not fehlt: return
+    zahl_ = collections.Counter()
+    for i, _ in daten["pool"]:
+        hs = daten["spiele"][i][1]
+        for p, h in fehlt:
+            if p < len(hs) and hs[p] == h: zahl_[(p, h)] += 1
+    for (p, h), n in zahl_.items(): daten["erreicht"][hk(p, h)] = n
+    for p, h in fehlt: daten["erreicht"].setdefault(hk(p, h), 0)
 
 def hebel_zug(b, mv):
     """Bauernzug, der schlägt oder einen gegnerischen Bauern angreift."""
@@ -163,7 +208,7 @@ def hebel_zug(b, mv):
     return any(b2.piece_at(q) and b2.piece_at(q).piece_type == chess.PAWN and b2.piece_at(q).color != b.turn
                for q in b2.attacks(mv.to_square))
 
-def strukturdaten(b, ich):
+def strukturdaten(b, ich, h):
     zent = lambda farbe: " ".join(chess.square_name(q) for q in sorted(b.pieces(chess.PAWN, farbe), key=lambda q: (chess.square_file(q), q))
                                   if chess.square_file(q) in (2, 3, 4, 5))
     w, s = zent(chess.WHITE), zent(chess.BLACK)
@@ -172,7 +217,7 @@ def strukturdaten(b, ich):
         return "kurz" if f >= 6 else ("lang" if f <= 2 else "keine")
     figuren = tuple(sorted(f"{'S' if b.piece_type_at(q) == chess.KNIGHT else 'L'}{chess.square_name(q)}"
                            for q in list(b.pieces(chess.KNIGHT, ich)) + list(b.pieces(chess.BISHOP, ich))))
-    return (f"{w} | {s}", epd(b), roch(chess.WHITE) + "/" + roch(chess.BLACK), figuren)
+    return (f"{w} | {s}", h, roch(chess.WHITE) + "/" + roch(chess.BLACK), figuren)
 
 def lade_repertoire(cfg):
     """Alle Stellungen aus der Repertoire PGN: Züge je Stellung, eigene Züge gelten als Repertoirezüge."""
@@ -229,7 +274,7 @@ class Baum:
 
     def daten(self, b, pfad, erste_ply):
         cfg = self.cfg; k = epd(b); ply = len(pfad)
-        c = self.z.get((ply, k)); tot = sum(c.values()) if c else 0
+        c = self.z.get(hk(ply, tk(b))); tot = sum(c.values()) if c else 0
         repz = self.rep.get(k, {})
         picks = []
         if ply < self.maxp and tot >= cfg["min_partien"]:
@@ -315,11 +360,12 @@ def teilen(cfg, p, k, bb, teil):
     return out
 
 def gesamtanteil(c, daten):
-    n = sum(daten["erreicht"].get((e["ply"], key(e["fa"])), 0) for e in c["eintraege"] if e["art"] == "daten")
+    n = sum(daten["erreicht"].get(hk_fen(e["ply"], e["fa"]), 0) for e in c["eintraege"] if e["art"] == "daten")
     return 100 * n / daten["n_pool"] if daten["n_pool"] else 0
 
 def kapitel_ordnen(cfg, kapitel, daten):
     """Sortiert nach Gesamtanteil, seltene Kapitel derselben Verzweigung werden zusammengelegt."""
+    erreicht_genau(daten, {(e["ply"], tk_fen(e["fa"])) for c in kapitel for e in c["eintraege"] if e["art"] == "daten"})
     for c in kapitel:
         c["gruppen"] = [(c["pfad"], c["eintraege"])]
         c["anteil"] = gesamtanteil(c, daten)
@@ -369,7 +415,7 @@ def verlaengern(cfg, kapitel, daten, knoten_von):
                     quelle = knoten_von.get(key(nxt["fa"])) if nxt["transpo"] else nxt
             ply = node["ply"]; b = chess.Board(node["fa"]); erst = True
             while ply < ziel:
-                z = daten["zaehler"].get((ply, epd(b))); tot = sum(z.values()) if z else 0
+                z = daten["zaehler"].get(hk(ply, tk(b))); tot = sum(z.values()) if z else 0
                 if tot < cfg["verlaengern_min_partien"]: break
                 m = z.most_common(1)[0][0]; mv = b.parse_san(m); fb = b.fen(); b.push(mv)
                 d = {"san": m, "uci": mv.uci(), "fb": fb, "fa": b.fen(), "art": "ext", "rep": False, "kids": [], "transpo": None,
@@ -433,7 +479,7 @@ def fehler_kandidaten(cfg, kapitel, daten):
             if d["art"] != "daten" or d["transpo"]: return
             b = chess.Board(d["fa"])
             if b.turn != ich and d["ply"] < maxp:
-                z = daten["zaehler"].get((d["ply"], key(d["fa"])))
+                z = daten["zaehler"].get(hk_fen(d["ply"], d["fa"]))
                 tot = sum(z.values()) if z else 0
                 if tot >= cfg["min_partien"]:
                     kand = [(m, n) for m, n in z.items()
@@ -453,7 +499,7 @@ def fehler_auswerten(cfg, kapitel, kandidaten, sf, daten):
             r = sf.get(f"F{cfg['fehler_tiefe']}|{key(d['fa'])}|{','.join(ucis)}")
             if not r: continue
             vz = 1 if gegner == chess.WHITE else -1
-            pz = daten["punkte"].get((d["ply"], key(d["fa"])), {})
+            pz = daten["punkte"].get(hk_fen(d["ply"], d["fa"]), {})
             for m, n in kand:
                 u = b.parse_san(m).uci(); x = r["kand"].get(u)
                 if not x: continue
@@ -478,7 +524,7 @@ def strukturen_auswerten(cfg, daten):
     out = []
     for k, n in zaehl.most_common(cfg["strukturen_anzahl"]):
         teil = [(s, h, p) for s, h, p in rec if s[0] == k]
-        bsp = collections.Counter(s[1] for s, _, _ in teil).most_common(1)[0][0]
+        bsp = beispiel_epd(daten, cfg["strukturen_zug"] * 2, collections.Counter(s[1] for s, _, _ in teil).most_common(1)[0][0])
         roch = collections.Counter(s[2] for s, _, _ in teil).most_common(3)
         fig = collections.Counter(f for s, _, _ in teil for f in s[3]).most_common(6)
         heb = collections.Counter(x for _, h, _ in teil for x in h)
@@ -490,6 +536,15 @@ def strukturen_auswerten(cfg, daten):
                     "figuren": [(f, 100 * m / n) for f, m in fig],
                     "hebel": [(x, 100 * m / n, 100 * heb_p[x] / m) for x, m in heb.most_common(5)]})
     return out
+
+def beispiel_epd(daten, ply, h):
+    """EPD der Stellung mit Hash h nach ply Halbzügen, aus der ersten Partie, die sie erreicht."""
+    for _, hs, zc in daten["spiele"]:
+        if len(hs) > ply and hs[ply] == h:
+            b = chess.Board()
+            for c in zc[:ply]: b.push(zug_aus_code(c))
+            return b.epd()
+    return chess.Board().epd()
 
 def zentrum(sid):
     w, s = sid.split(" | ")
@@ -545,30 +600,32 @@ def stockfish(cfg, aufgaben):
     return cache
 
 # ---------------------------------------------------------------- Musterpartien
-def musterpartien(cfg, alle, ziele):
+def musterpartien(cfg, daten, ziel_fens):
     """Je Endstellung die Partie mit dem höchsten Elo Schnitt und die eigenen Folgezüge aller Partien
-    (für den typischen Aufbau aus der Praxis)."""
+    (für den typischen Aufbau aus der Praxis). Nutzt die beim Laden gespeicherten Stellungen und Züge,
+    nachgespielt wird hier nichts mehr."""
+    ziele = {tk_fen(f): key(f) for f in ziel_fens}                  # Hash -> EPD
     best = {}; folgen = collections.defaultdict(list)
-    maxp = cfg["bis_zug"] * 2; ich = cfg["ich"]; nplan = cfg["plan_zuege"]
-    fs = Fortschritt("Musterpartien", len(alle))
-    for f in alle:
+    maxp = cfg["bis_zug"] * 2; weiss = cfg["ich"] == chess.WHITE; nplan = cfg["plan_zuege"]
+    fs = Fortschritt("Musterpartien", len(daten["spiele"]))
+    for f, hs, zc in daten["spiele"]:
         fs.schritt()
+        n = min(len(zc), maxp + 2 * nplan)
+        treffer = [q for q in range(1, n + 1) if hs[q] in ziele]
+        if not treffer: continue
         try: schnitt = (int(f[3]) + int(f[4])) / 2
         except ValueError: continue
         pkt = {"1-0": 1.0, "0-1": 0.0, "1/2-1/2": 0.5}.get(f[5], 0.5)
-        if ich == chess.BLACK: pkt = 1 - pkt
-        b = chess.Board(); verlauf = []
-        for z in f[11].split()[:maxp + 2 * nplan]:     # auch hinter dem Linienende, für die Folgezüge
-            try: mv = b.parse_san(z.rstrip("?!"))
-            except ValueError: break
-            eigen = b.turn == ich; san = b.san(mv); nr = b.fullmove_number
-            b.push(mv); verlauf.append((epd(b), mv.uci(), san, eigen, nr))
-        for i, (k, _, _, _, _) in enumerate(verlauf):
-            if k not in ziele: continue
+        if not weiss: pkt = 1 - pkt
+        sans = f[11].split()
+        for q in treffer:
+            k = ziele[hs[q]]
             if k not in best or schnitt > best[k][0]:
                 d = f[8]; ort = f[0].replace("https://", "")
                 best[k] = (schnitt, f"{f[5]} ({(int(f[9]) + 1) // 2}) {f[1]} ({f[3]}) gegen {f[2]} ({f[4]}), Lichess {d[5:7]}.{d[:4]}, {ort}")
-            eigene = [(u, s, nr) for _, u, s, e, nr in verlauf[i + 1:] if e and "x" not in s][:nplan]   # Schlagzüge sind Reaktionen, kein Aufbau
+            # eigene Folgezüge ohne Schlagzüge (Schlagzüge sind Reaktionen, kein Aufbau)
+            eigene = [(zug_aus_code(zc[j]).uci(), sans[j].rstrip("?!"), j // 2 + 1) for j in range(q, n)
+                      if (j % 2 == 0) == weiss and "x" not in sans[j]][:nplan]
             if eigene: folgen[k].append((eigene, pkt))
     fs.fertig()
     print(f"  Musterpartien: {len(best)} von {len(ziele)} Endstellungen", flush=True)
@@ -771,7 +828,7 @@ def main():
     print("4/6 Fehler des Gegners und Musterpartien", flush=True)
     fehler_liste, fehler_karte = fehler_auswerten(cfg, kapitel, kandidaten, sf, daten) if cfg["fehler"] else ([[] for _ in kapitel], {})
     print(f"  {len(fehler_karte)} häufige Fehler gefunden", flush=True)
-    muster, plaene = musterpartien(cfg, daten["alle"], {key(f) for f in fens})
+    muster, plaene = musterpartien(cfg, daten, fens)
 
     print("5/6 Repertoire schreiben", flush=True)
     w = Schreiber(cfg, kapitel, sf, muster, fehler_karte); w.plaene = plaene

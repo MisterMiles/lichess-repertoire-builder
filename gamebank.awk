@@ -1,5 +1,5 @@
 # Wandelt eine Lichess Monatsdatei (PGN Strom) in eine Tabelle aller Partien
-# ohne Bullet, ohne Bots und ohne Partien ohne Elo. Spalten wie pgn_tabelle.awk:
+# ohne Bullet, ohne Bots, ohne Partien ohne Elo oder Ergebnis. Spalten (TSV) für repertoire.py:
 #   Site, White, Black, WhiteElo, BlackElo, Result, Termination, TimeControl,
 #   Date, Halbzüge gesamt, letzter Zug, erste N Halbzüge
 # Aufruf: zstd -dc monat.pgn.zst | mawk -v plies=40 -f gamebank.awk > bank.tsv
