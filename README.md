@@ -6,6 +6,16 @@
 
 Tell it which opening you play. The tool grabs real Lichess games from your rating range and turns them into a repertoire PGN: what your opponents actually play, how those games end, where they go wrong most often and how Stockfish sees the positions. Open the PGN in a Lichess study or in ChessBase.
 
+## The idea behind it
+
+A repertoire from a book tells you what is best in theory. This tool tells you what you will actually face at your level and how to meet it.
+
+- **Practice first, engine second.** The games decide what goes into the repertoire and in which order: the more often a line occurs in your rating range, the earlier it comes. Stockfish checks and corrects, it does not choose the topics.
+- **Positions, not move orders.** Different move orders that reach the same position are counted together, so a line is not split into many small ones that look rare.
+- **Mistakes that actually happen.** For every position you see which errors your opponents really make, how often, and what punishes them. A mistake is a move that costs a clear share of the winning chances according to Stockfish.
+- **Plans, not only moves.** Each line ends with a model game, the typical setup that scored best in practice (blue arrows) and the pawn structure you are heading for.
+- **Collect once, analyse as often as you like.** The slow part is the raw data. It is turned once into a game bank. Every further repertoire, whether other starting moves, other colour or other rating range, only searches the bank. Stockfish results are cached too, so a second run computes only what is new.
+
 ## Quick start (Mac)
 
 **1. Install the programs** (once, in the Terminal app). If Homebrew is missing, run the line from [brew.sh](https://brew.sh) first.
@@ -55,6 +65,18 @@ The results land in the folder `repertoires` next to the tool folder (change it 
 Games, Stockfish cache and `konfiguration.json` stay in `repertoires/arbeit/NAME`, so the tool folder stays clean.
 
 The PGN comments are in German.
+
+## How to work with it
+
+1. **Check the idea cheaply.** Run with `--quick` first. It shows within minutes whether your starting moves and rating range give a sensible tree. Wrong starting moves are caught before anything is downloaded.
+2. **First full run builds the game bank.** Add `--months 3 --bank FOLDER --archive FOLDER --delete-archive` and leave out `--quick`. Each 29 GB monthly file is deleted as soon as its table is built, so you keep only the compact bank.
+3. **Read in the right order.** Open the quickstart file first, it contains the 15 most likely lines. The main file is the reference you come back to.
+4. **Study in small steps.** Import the PGN into a Lichess study and learn the chapters from the top. The order already is the order of importance.
+5. **Tune and rerun.** Settings such as the minimum number of games per line or the depth of the main lines are in `konfiguration.json` in the working folder. A rerun reuses games and engine results.
+6. **Add your own repertoire.** With `--repertoire PGN` your own moves are marked, so you see where practice and your preparation differ.
+7. **Refresh from time to time.** New months go into the same bank and change the numbers only slightly.
+
+Keep in mind what the numbers are: statistics of online games in your rating range, without bullet and bots. Lines with few games are noisy, Stockfish evaluations are taken at a fixed depth, and the model game is an example, not a proof. The repertoire is a well sorted starting point for your own judgement.
 
 ## Good to know
 

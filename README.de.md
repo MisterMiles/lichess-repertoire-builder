@@ -6,6 +6,16 @@
 
 Du sagst, welche Eröffnung du spielst. Das Werkzeug holt sich dazu echte Lichess Partien aus deinem Elo Bereich und baut daraus ein Repertoire als PGN: was deine Gegner wirklich spielen, wie die Partien ausgehen, wo sie am häufigsten Fehler machen und wie Stockfish die Stellungen sieht. Die PGN öffnest du in einer Lichess Studie oder in ChessBase.
 
+## Die Idee dahinter
+
+Ein Repertoire aus dem Buch sagt dir, was in der Theorie am besten ist. Dieses Werkzeug sagt dir, was dir auf deinem Niveau wirklich begegnet und wie du darauf reagierst.
+
+- **Erst die Praxis, dann die Engine.** Die Partien bestimmen, was ins Repertoire kommt und in welcher Reihenfolge: je häufiger eine Linie in deinem Elo Bereich vorkommt, desto früher steht sie da. Stockfish prüft und korrigiert, er wählt nicht die Themen.
+- **Stellungen statt Zugfolgen.** Verschiedene Zugfolgen, die zur selben Stellung führen, werden zusammengezählt. Eine Linie zerfällt so nicht in viele kleine, die selten aussehen.
+- **Fehler, die wirklich passieren.** Zu jeder Stellung siehst du, welche Fehler deine Gegner tatsächlich machen, wie oft, und was sie bestraft. Ein Fehler ist ein Zug, der laut Stockfish einen deutlichen Teil der Gewinnchancen kostet.
+- **Pläne, nicht nur Züge.** Jede Linie endet mit einer Musterpartie, dem typischen Aufbau, der in der Praxis am besten gepunktet hat (blaue Pfeile), und der Bauernstruktur, auf die du zusteuerst.
+- **Einmal sammeln, beliebig oft auswerten.** Der langsame Teil sind die Rohdaten. Sie werden einmal zu einer Partienbank. Jedes weitere Repertoire, ob andere Startzüge, andere Farbe oder anderer Elo Bereich, durchsucht nur noch die Bank. Auch die Stockfish Ergebnisse werden zwischengespeichert, ein zweiter Lauf rechnet nur Neues.
+
 ## Schnellstart (Mac)
 
 **1. Programme installieren** (einmalig, im Programm Terminal). Falls Homebrew fehlt, zuerst die Zeile von [brew.sh](https://brew.sh) ausführen.
@@ -53,6 +63,18 @@ Die Ergebnisse landen im Ordner `repertoires` neben dem Tool Ordner (änderbar m
 - **`…_quickstart.pgn`**: die 15 wahrscheinlichsten Linien bis Zug 14, ideal zum Üben.
 
 Partien, Stockfish Zwischenspeicher und `konfiguration.json` bleiben in `repertoires/arbeit/NAME`, der Tool Ordner bleibt sauber.
+
+## So arbeitest du am besten damit
+
+1. **Die Idee günstig prüfen.** Starte zuerst mit `--quick`. Nach wenigen Minuten siehst du, ob Startzüge und Elo Bereich einen sinnvollen Baum ergeben. Falsche Startzüge fallen auf, bevor etwas heruntergeladen wird.
+2. **Der erste volle Lauf baut die Partienbank.** Hänge `--months 3 --bank ORDNER --archive ORDNER --delete-archive` an und lass `--quick` weg. Jede 29 GB Monatsdatei wird gelöscht, sobald ihre Tabelle fertig ist, übrig bleibt nur die kompakte Bank.
+3. **In der richtigen Reihenfolge lesen.** Öffne zuerst die Quickstart Datei, sie enthält die 15 wahrscheinlichsten Linien. Die Hauptdatei ist das Nachschlagewerk, zu dem du zurückkehrst.
+4. **In kleinen Schritten lernen.** Importiere die PGN in eine Lichess Studie und lerne die Kapitel von oben nach unten. Die Reihenfolge ist schon die Reihenfolge der Wichtigkeit.
+5. **Anpassen und neu laufen lassen.** Einstellungen wie die Mindestzahl an Partien je Linie oder die Tiefe der Hauptvarianten stehen in der `konfiguration.json` im Arbeitsordner. Ein neuer Lauf nutzt Partien und Engine Ergebnisse wieder.
+6. **Das eigene Repertoire dazunehmen.** Mit `--repertoire PGN` werden deine eigenen Züge markiert, so siehst du, wo Praxis und deine Vorbereitung auseinanderliegen.
+7. **Ab und zu auffrischen.** Neue Monate kommen in dieselbe Bank und verändern die Zahlen nur leicht.
+
+Behalte im Kopf, was die Zahlen sind: Statistik von Onlinepartien in deinem Elo Bereich, ohne Bullet und Bots. Linien mit wenigen Partien sind unsicher, Stockfish Bewertungen entstehen bei fester Tiefe, und die Musterpartie ist ein Beispiel, kein Beweis. Das Repertoire ist ein gut sortierter Ausgangspunkt für dein eigenes Urteil.
 
 ## Gut zu wissen
 
