@@ -4,17 +4,9 @@
 
 [English](README.md) | **Deutsch**
 
-Du sagst, welche Eröffnung du spielst. Das Werkzeug holt sich dazu echte Lichess Partien aus deinem Elo Bereich und baut daraus ein Repertoire als PGN: was deine Gegner wirklich spielen, wie die Partien ausgehen, wo sie am häufigsten Fehler machen und wie Stockfish die Stellungen sieht. Die PGN öffnest du in einer Lichess Studie oder in ChessBase.
+Du sagst, welche Eröffnung du spielst. Das Werkzeug nimmt echte Lichess Partien aus deinem Elo Bereich und baut daraus ein Repertoire als PGN: was deine Gegner wirklich spielen, wo sie am häufigsten Fehler machen und wie Stockfish die Stellungen sieht. Die PGN öffnest du in einer Lichess Studie oder in ChessBase.
 
-## Die Idee dahinter
-
-Ein Repertoire aus dem Buch sagt dir, was in der Theorie am besten ist. Dieses Werkzeug sagt dir, was dir auf deinem Niveau wirklich begegnet und wie du darauf reagierst.
-
-- **Erst die Praxis, dann die Engine.** Die Partien bestimmen, was ins Repertoire kommt und in welcher Reihenfolge: je häufiger eine Linie in deinem Elo Bereich vorkommt, desto früher steht sie da. Stockfish prüft und korrigiert, er wählt nicht die Themen.
-- **Stellungen statt Zugfolgen.** Verschiedene Zugfolgen, die zur selben Stellung führen, werden zusammengezählt. Eine Linie zerfällt so nicht in viele kleine, die selten aussehen.
-- **Fehler, die wirklich passieren.** Zu jeder Stellung siehst du, welche Fehler deine Gegner tatsächlich machen, wie oft, und was sie bestraft. Ein Fehler ist ein Zug, der laut Stockfish einen deutlichen Teil der Gewinnchancen kostet.
-- **Pläne, nicht nur Züge.** Jede Linie endet mit einer Musterpartie, dem typischen Aufbau, der in der Praxis am besten gepunktet hat (blaue Pfeile), und der Bauernstruktur, auf die du zusteuerst.
-- **Einmal sammeln, beliebig oft auswerten.** Der langsame Teil sind die Rohdaten. Sie werden einmal zu einer Partienbank. Jedes weitere Repertoire, ob andere Startzüge, andere Farbe oder anderer Elo Bereich, durchsucht nur noch die Bank. Auch die Stockfish Ergebnisse werden zwischengespeichert, ein zweiter Lauf rechnet nur Neues.
+[Schnellstart](#schnellstart-mac) · [Die Idee](#die-idee-dahinter) · [So arbeitest du damit](#so-arbeitest-du-am-besten-damit) · [Optionen](#optionen) · [Gut zu wissen](#gut-zu-wissen)
 
 ## Schnellstart (Mac)
 
@@ -39,52 +31,74 @@ Ohne git: oben auf GitHub „Code“ und dann „Download ZIP“ wählen, entpac
 bash repertoire.sh white "1. e4"
 ```
 
-Fertig. Beim ersten Mal richtet das Skript alles Nötige selbst ein.
-
-## Beispiele
+Beim ersten Lauf richtet das Skript alles Nötige selbst ein. Die Farbe ist `white` oder `black`, Züge schreibst du in englischer Notation. Für Schwarz gehört deine eigene Antwort mit in die Startzüge.
 
 ```bash
-# Weiß mit 1.e4, gegen alles, was Schwarz spielt
-bash repertoire.sh white "1. e4"
-
-# Schwarz gegen 1.d4 mit 1...d5, Gegner zwischen 1600 und 2000, zuerst als schneller Probelauf
+# Schwarz gegen 1.d4 mit 1...d5, Gegner mit Elo 1600 bis 2000, erst ein schneller Probelauf
 bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 
-# Mehr Partien: die letzten drei Monate statt nur einem
+# Mehr Partien: die letzten drei Monate statt einem
 bash repertoire.sh white "1. e4" --months 3
 ```
 
-Farbe ist `white` oder `black`, Optionen sind englisch. Die deutschen Namen von früher (`weiss`, `schwarz`, `--monat`, `--schnell` und so weiter) funktionieren weiter. Züge schreibst du in englischer Notation: N Springer, B Läufer, R Turm, Q Dame, K König. Bei Schwarz gehört deine eigene Antwort mit in die Startzüge. Auch die PGN nutzt englische Notation, mit `--notation de` stehen Kapitelnamen und Kommentare mit deutschen Figuren (S, L, T, D).
-
 ## Was du bekommst
 
-Die Ergebnisse landen im Ordner `repertoires` neben dem Tool Ordner (änderbar mit `--out ORDNER`):
-- **`….pgn`**: dein Repertoire, ein Kapitel je Linie, sortiert danach, wie oft du sie in der Praxis bekommst (der Anteil steht im Kapitelnamen). Die Hauptvariante jedes Kapitels läuft mindestens bis Zug 15, seltene Linien stehen gebündelt am Ende. Am Linienende stehen Stockfish Bewertung, eine Musterpartie und blaue Pfeile für den Aufbau, der in der Praxis am besten gepunktet hat, am Kapitelende die häufigsten Fehler deiner Gegner samt Widerlegung. Dazu kommen die typischen Bauernstrukturen.
-- **`…_quickstart.pgn`**: die 15 wahrscheinlichsten Linien bis Zug 14, ideal zum Üben.
+Die Ergebnisse landen im Ordner `repertoires` neben dem Tool Ordner (änderbar mit `--out`).
 
-Partien, Stockfish Zwischenspeicher und `konfiguration.json` bleiben in `repertoires/arbeit/NAME`, der Tool Ordner bleibt sauber.
+| Datei | Inhalt |
+| --- | --- |
+| `NAME.pgn` | Dein Repertoire, ein Kapitel je Linie, sortiert danach, wie oft du sie bekommst. Die Hauptvarianten laufen mindestens bis Zug 15, seltene Linien stehen gebündelt am Ende. |
+| `NAME_quickstart.pgn` | Die 15 wahrscheinlichsten Linien bis Zug 14, ideal zum Üben. |
+| `NAME_strukturen.json` | Die typischen Bauernstrukturen mit allen Zahlen. |
+
+Am Linienende stehen Stockfish Bewertung, eine Musterpartie und blaue Pfeile für den Aufbau, der in der Praxis am besten gepunktet hat. Am Kapitelende stehen die häufigsten Fehler deiner Gegner samt Widerlegung. Partien, Zwischenspeicher der Engine und `konfiguration.json` bleiben in `repertoires/arbeit/NAME`, der Tool Ordner bleibt sauber.
+
+## Die Idee dahinter
+
+Ein Repertoire aus dem Buch sagt dir, was in der Theorie am besten ist. Dieses Werkzeug sagt dir, was dir auf deinem Niveau wirklich begegnet und wie du darauf reagierst.
+
+- **Erst die Praxis, dann die Engine.** Die Partien bestimmen, was hineinkommt und in welcher Reihenfolge. Stockfish prüft und korrigiert, er wählt nicht die Themen.
+- **Stellungen statt Zugfolgen.** Verschiedene Zugfolgen, die zur selben Stellung führen, werden zusammengezählt.
+- **Fehler, die wirklich passieren.** Zu jeder Stellung siehst du, welche Fehler deine Gegner tatsächlich machen, wie oft, und was sie bestraft.
+- **Pläne, nicht nur Züge.** Jede Linie endet mit einer Musterpartie, dem am besten punktenden Aufbau und der Bauernstruktur, auf die du zusteuerst.
+- **Einmal sammeln, oft auswerten.** Der langsame Teil sind die Rohdaten. Sie werden einmal zur Partienbank. Jedes weitere Repertoire durchsucht nur noch die Bank, und die Stockfish Ergebnisse werden zwischengespeichert.
 
 ## So arbeitest du am besten damit
 
-1. **Die Idee günstig prüfen.** Starte zuerst mit `--quick`. Nach wenigen Minuten siehst du, ob Startzüge und Elo Bereich einen sinnvollen Baum ergeben. Falsche Startzüge fallen auf, bevor etwas heruntergeladen wird.
-2. **Der erste volle Lauf baut die Partienbank.** Hänge `--months 3 --bank ORDNER --archive ORDNER --delete-archive` an und lass `--quick` weg. Jede 29 GB Monatsdatei wird gelöscht, sobald ihre Tabelle fertig ist, übrig bleibt nur die kompakte Bank.
-3. **In der richtigen Reihenfolge lesen.** Öffne zuerst die Quickstart Datei, sie enthält die 15 wahrscheinlichsten Linien. Die Hauptdatei ist das Nachschlagewerk, zu dem du zurückkehrst.
-4. **In kleinen Schritten lernen.** Importiere die PGN in eine Lichess Studie und lerne die Kapitel von oben nach unten. Die Reihenfolge ist schon die Reihenfolge der Wichtigkeit.
-5. **Anpassen und neu laufen lassen.** Einstellungen wie die Mindestzahl an Partien je Linie oder die Tiefe der Hauptvarianten stehen in der `konfiguration.json` im Arbeitsordner. Ein neuer Lauf nutzt Partien und Engine Ergebnisse wieder.
-6. **Das eigene Repertoire dazunehmen.** Mit `--repertoire PGN` werden deine eigenen Züge markiert, so siehst du, wo Praxis und deine Vorbereitung auseinanderliegen.
-7. **Ab und zu auffrischen.** Neue Monate kommen in dieselbe Bank und verändern die Zahlen nur leicht.
+1. **Günstig ausprobieren.** Starte zuerst mit `--quick`. Falsche Startzüge fallen auf, bevor etwas heruntergeladen wird.
+2. **Der erste volle Lauf baut die Partienbank.** Hänge `--months 3 --bank ORDNER --archive ORDNER --delete-archive` an und lass `--quick` weg. Jede 29 GB Monatsdatei wird gelöscht, sobald ihre Tabelle fertig ist.
+3. **In der richtigen Reihenfolge lesen.** Zuerst die Quickstart Datei, dann die Hauptdatei als Nachschlagewerk.
+4. **In kleinen Schritten lernen.** Importiere die PGN in eine Lichess Studie und lerne von oben nach unten, die Reihenfolge ist die Reihenfolge der Wichtigkeit.
+5. **Anpassen und neu laufen lassen.** Die Einstellungen stehen in `konfiguration.json` im Arbeitsordner. Ein neuer Lauf nutzt Partien und Engine Ergebnisse wieder.
+6. **Mit dem eigenen Repertoire vergleichen** über `--repertoire PGN`. Deine Züge werden markiert.
+7. **Ab und zu auffrischen.** Neue Monate kommen in dieselbe Bank.
 
-Behalte im Kopf, was die Zahlen sind: Statistik von Onlinepartien in deinem Elo Bereich, ohne Bullet und Bots. Linien mit wenigen Partien sind unsicher, Stockfish Bewertungen entstehen bei fester Tiefe, und die Musterpartie ist ein Beispiel, kein Beweis. Das Repertoire ist ein gut sortierter Ausgangspunkt für dein eigenes Urteil.
+Die Zahlen sind Statistik von Onlinepartien in deinem Elo Bereich, ohne Bullet und Bots. Linien mit wenigen Partien sind unsicher, Bewertungen entstehen bei fester Tiefe, und die Musterpartie ist ein Beispiel, kein Beweis.
+
+## Optionen
+
+| Option | Bedeutung | Standard |
+| --- | --- | --- |
+| `--elo VON-BIS` | Elo Bereich beider Spieler | 1800-2499 |
+| `--month JJJJ-MM` / `--month A..B` | Ein Monat oder ein Bereich | letzter voller Monat |
+| `--months N` | Die letzten N vollen Monate | aus |
+| `--bank ORDNER` | Partienbank: jeder Monat wird einmal zu einer kompakten Tabelle (etwa 5 GB pro Monat), spätere Analysen brauchen Sekunden pro Monat | aus |
+| `--archive ORDNER` | Monatsdateien (je etwa 29 GB) behalten statt nur zu streamen | aus |
+| `--delete-archive` / `--keep-archive` | Monatsdateien löschen, sobald die Bank sie hat, oder nie. Ohne beides wirst du einmal am Start gefragt | fragen |
+| `--out ORDNER` | Wohin die fertigen Dateien kommen | `repertoires` neben dem Tool |
+| `--repertoire PGN` | Dein eigenes Repertoire, seine Züge werden markiert | aus |
+| `--quick` | Probelauf mit geringer Stockfish Tiefe | aus |
+| `--notation de` | Deutsche Figurenbuchstaben (S, L, T, D) in Namen und Kommentaren | englisch |
+| `--plain` | Ohne Animation | Animation an |
+
+Die vollständige Liste mit allen Feineinstellungen steht in der [ausführlichen Anleitung](docs/ANLEITUNG.md).
 
 ## Gut zu wissen
 
-- **Dauer:** Die Partien eines Lichess Monats werden aus dem Internet gestreamt (etwa 29 GB, nichts davon wird gespeichert). Das dauert je nach Leitung 30 Minuten bis einige Stunden. Danach rechnet Stockfish 15 bis 60 Minuten. Mit `--quick` siehst du das Ergebnis in wenigen Minuten, sobald die Partien da sind.
-- **Mehr Partien:** `--months 3` nimmt die letzten drei vollen Monate, `--month 2026-07..2026-09` einen festen Zeitraum. Jeder Monat wird einzeln geladen und gefiltert, die Wartezeit wächst also mit. Mit `--archive ORDNER` bleiben die Monatsdateien gespeichert (je etwa 29 GB) und werden beim nächsten Mal nicht neu geladen.
-- **Mehrere Analysen:** Mit `--bank ORDNER` wird jeder Monat einmal in eine Partienbank umgewandelt, eine kompakte Tabelle aller Partien (etwa 5 GB pro Monat). Danach braucht jede weitere Analyse mit anderen Startzügen, anderer Farbe oder anderem Elo Bereich nur noch Sekunden pro Monat, bevor Stockfish startet. Beispiel: `bash repertoire.sh white "1. e4" --months 3 --bank ~/gamebank`. Ein Monat, der in der Bank ist, wird nie neu gebaut, und mit `--archive` plus `--delete-archive` wird die 29 GB Monatsdatei gelöscht, sobald ihre Banktabelle fertig ist.
-- **Beim Warten:** Bei jedem Schritt hüpft ein Springer über ein kleines Brett, dazu Prozent und Restzeit. `--plain` schaltet das ab.
-- **Nochmal starten:** Mit den gleichen Angaben nutzt das Skript die schon geladenen Partien und rechnet nur, was fehlt.
+- **Dauer:** Ein Lichess Monat wird aus dem Internet gestreamt (etwa 29 GB, nichts davon wird gespeichert). Das dauert 30 Minuten bis einige Stunden, danach rechnet Stockfish 15 bis 60 Minuten. Mit `--quick` siehst du das Ergebnis in wenigen Minuten, sobald die Partien da sind.
+- **Nochmal starten:** Mit denselben Angaben nutzt das Skript die schon geladenen Partien und rechnet nur, was fehlt. Ein Monat, der schon in der Bank ist, wird nie neu gebaut.
+- **Beim Warten:** Bei jedem Schritt hüpft ein Springer über ein kleines Brett, dazu Prozent und Restzeit.
 - **Linux:** Statt Homebrew `sudo apt install python3-venv zstd pv mawk stockfish`, der Rest ist gleich.
-- **Mehr Einstellungen:** Elo, Monat, eigenes Repertoire und alle Feineinstellungen stehen in der [ausführlichen Anleitung](docs/ANLEITUNG.md).
 
 ## Lizenz
 
