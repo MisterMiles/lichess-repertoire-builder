@@ -84,6 +84,7 @@ Die folgenden Abschnitte beschreiben die einzelnen Schritte für volle Kontrolle
 ```bash
 bash gamebank.sh ~/gamebank 2026-07 2026-08 2026-09
 bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess    # aus gespeicherten Monatsdateien
+bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess --loeschen   # und danach jede löschen
 ```
 
 | Option | Bedeutung | Standard |
@@ -91,6 +92,8 @@ bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess    # aus gespeicherten M
 | `--archive ORDNER` (`--archiv`) | Monatsdateien von dort lesen, fehlende dorthin laden | streamen |
 | `--with-bullet` (`--mit-bullet`) | Bullet Partien mit aufnehmen | ohne |
 | `--jobs N` (`--teile`) | parallele Prozesse | CPU Kerne minus eins, höchstens 8 |
+
+**Monatsdateien löschen:** Ist ein Monat in der Bank, braucht man sein 29 GB Original nicht mehr. Mit `--loeschen` (`--delete-archive`) wird jede Monatsdatei direkt gelöscht, nachdem ihre Banktabelle gebaut ist und `zstd -t` besteht, es liegt also höchstens eine Monatsdatei gleichzeitig da. Mit `--behalten` (`--keep-archive`) wird nichts gelöscht. Ohne beides fragt das Skript einmal zu Beginn (es listet vorhandene Dateien mit Größe), und ohne Terminal löscht es nichts. Ein Monat, der schon in der Bank ist, wird nie neu gebaut, eine übrig gebliebene Monatsdatei davon wird auf dieselbe Weise aufgeräumt. Die Bank merkt sich nicht, ob sie mit oder ohne Bullet gebaut wurde, das entscheidest du beim Bauen.
 
 Gemessen an einem 2 GB Ausschnitt aus September 2026: 63 % der Partien bleiben übrig (ohne Bullet und Bots), die Bank ist etwa 2,4 % so groß wie die entpackte PGN. Hochgerechnet sind das rund 5 GB pro Monat statt 29 GB, die Suche nach Startzügen dauert dann unter einer Minute pro Monat statt rund 8 Minuten.
 

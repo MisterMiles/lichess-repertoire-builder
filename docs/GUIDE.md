@@ -86,6 +86,7 @@ The sections below describe the single steps for full control.
 ```bash
 bash gamebank.sh ~/gamebank 2026-07 2026-08 2026-09
 bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess    # from stored monthly files
+bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess --delete-archive   # and delete each one afterwards
 ```
 
 | Option | Meaning | Default |
@@ -93,6 +94,8 @@ bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess    # from stored monthly
 | `--archive FOLDER` (`--archiv`) | read monthly files from there, download missing ones into it | stream |
 | `--with-bullet` (`--mit-bullet`) | include bullet games | without |
 | `--jobs N` (`--teile`) | parallel processes | CPU cores minus one, at most 8 |
+
+**Deleting the monthly files:** once a month is in the bank you do not need its 29 GB original any more. With `--delete-archive` each monthly file is deleted right after its bank table is built and passes `zstd -t`, so at most one monthly file exists at a time. With `--keep-archive` nothing is deleted. Without either option the script asks once at the start (it lists existing files with their size), and without a terminal it deletes nothing. A month that is already in the bank is never built again, and a leftover monthly file of it is cleaned up the same way. The bank does not record whether it was built with or without bullet games, so decide that when you build it.
 
 Measured on a 2 GB slice of September 2026: 63 % of the games remain (no bullet, no bots), the bank is about 2.4 % of the unpacked PGN. Extrapolated that is roughly 5 GB per month instead of 29 GB, and searching for starting moves then takes under a minute per month instead of about 8 minutes.
 

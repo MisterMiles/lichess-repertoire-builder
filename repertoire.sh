@@ -15,6 +15,9 @@
 #   --bank FOLDER        game bank: every month is turned once into a compact table of all
 #                        games (about 5 GB per month). After that every further analysis with
 #                        any starting moves and rating range takes only seconds per month.
+#                        With --bank the monthly files can be deleted as soon as the bank has them:
+#                        --delete-archive (--loeschen) or --keep-archive (--behalten). Without
+#                        either, you are asked once at the start.
 #   --file FILE          your own Lichess file (.pgn or .pgn.zst) instead of the download (--datei)
 #   --name NAME          name of the repertoire                     (default from colour and moves)
 #   --out FOLDER         where the finished files go                (--ausgabe, default: folder "repertoires"
@@ -34,11 +37,11 @@
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$DIR/animation.sh"
-hilfe() { sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; }
+hilfe() { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; }
 
 [ $# -lt 2 ] && { hilfe; exit 1; }
 FARBE="$1"; START=$(printf '%s' "$2" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g'); shift 2
-ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; BANK=""; DATEI=""; NAME=""; ERG=""; REP=""; SCHNELL=""; NOTATION="en"
+ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; BANK=""; DATEI=""; NAME=""; ERG=""; REP=""; SCHNELL=""; NOTATION="en"; LOESCHEN=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --elo) ELO="$2"; shift 2;;
@@ -46,6 +49,8 @@ while [ $# -gt 0 ]; do
     --months|--monate) ANZAHL="$2"; shift 2;;
     --archive|--archiv) ARCHIV="$2"; shift 2;;
     --bank|--gamebank|--partienbank) BANK="$2"; shift 2;;
+    --delete-archive|--loeschen) LOESCHEN="--delete-archive"; shift;;
+    --keep-archive|--behalten) LOESCHEN="--keep-archive"; shift;;
     --file|--datei) DATEI="$2"; shift 2;;
     --name) NAME="$2"; shift 2;;
     --out|--ausgabe) ERG="$2"; ERG_GEWAEHLT=1; shift 2;;
@@ -153,7 +158,7 @@ PYEOF
   AWK=awk; command -v gawk >/dev/null 2>&1 && AWK=gawk; command -v mawk >/dev/null 2>&1 && AWK=mawk
   STARTZ=$(printf '%s' "$START" | sed -E 's/[0-9]+\.+ ?/ /g' | tr -s ' ' | sed -E 's/^ //; s/ $//')
   if [ -n "$BANK" ]; then
-    BANKARGS=(); [ -n "$ARCHIV" ] && BANKARGS=(--archive "$ARCHIV")
+    BANKARGS=(); [ -n "$ARCHIV" ] && BANKARGS=(--archive "$ARCHIV"); [ -n "$LOESCHEN" ] && BANKARGS+=("$LOESCHEN")
     bash "$DIR/gamebank.sh" "$BANK" $MONATE "${BANKARGS[@]}"
   fi
   for M in $MONATE; do
