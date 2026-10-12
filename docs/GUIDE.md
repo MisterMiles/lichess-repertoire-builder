@@ -53,7 +53,7 @@ Sources:
 
 ## The one command way: repertoire.sh
 
-`repertoire.sh` runs all steps below in one go: it sets up a Python environment, streams and filters the games, writes `konfiguration.json` and builds the repertoire. Everything lands in one folder.
+`repertoire.sh` runs all steps below in one go: it sets up a Python environment, streams and filters the games, writes `konfiguration.json` and builds the repertoire. The finished files land in a results folder (default: `repertoires` next to the tool folder, change with `--out`), games, engine cache and `konfiguration.json` in `repertoires/arbeit/NAME`.
 
 ```bash
 bash repertoire.sh white "1. e4"
@@ -68,7 +68,8 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 | `--bank FOLDER` | game bank: every month is turned once into a table of all games (no bullet, no bots, about 5 GB per month). Further analyses only search in it, a few seconds per month. With `--archive` the bank is built from the stored monthly files, otherwise streamed | off |
 | `--archive FOLDER` (`--archiv`) | keep the monthly files there instead of only streaming (about 29 GB each), existing ones are reused | off |
 | `--file FILE` (`--datei`) | your own Lichess file (`.pgn` or `.pgn.zst`) instead of the download | off |
-| `--name NAME` | folder name for the results | from colour and moves |
+| `--name NAME` | name of the repertoire | from colour and moves |
+| `--out FOLDER` | results folder, working files go to `FOLDER/arbeit/NAME` (`--ausgabe`) | `repertoires` next to the tool folder |
 | `--repertoire PGN` | your own repertoire, its moves get marked | none |
 | `--plain` | no knight animation, plain output (automatic when the output goes to a file) | off |
 | `--quick` (`--schnell`) | quick trial run with low Stockfish depth | off |
@@ -170,7 +171,9 @@ Outputs:
 - `<output>.pgn`: the repertoire
 - `<output>_quickstart.pgn`: the most likely lines up to move 14, one chapter per line. Where the data ends, the line continues with Stockfish's best move, marked with a comment.
 - `<output>_strukturen.json`: the pawn structures with all numbers, a base for your own explanations
-- `<output>_stockfish.json`: engine cache
+- `<output>_stockfish.json`: engine cache (stays in the working folder)
+
+With `"ergebnis": "FOLDER"` in `konfiguration.json` the first three files go to that folder, `repertoire.sh` sets it for you.
 
 ### Runtime and progress
 

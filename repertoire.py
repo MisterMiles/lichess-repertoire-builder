@@ -10,6 +10,8 @@ Ausgaben:
   <ausgabe>_quickstart.pgn    die wahrscheinlichsten Linien zum schnellen Üben
   <ausgabe>_strukturen.json   Strukturen mit Zahlen, Grundlage für eigene Erklärungstexte
   <ausgabe>_stockfish.json    Zwischenspeicher der Engine, ein zweiter Lauf rechnet nur Neues
+Mit "ergebnis": "ORDNER" in der Konfiguration landen die ersten drei in diesem Ordner,
+der Zwischenspeicher bleibt neben der Konfiguration.
 """
 import sys, os, json, re, math, time, collections, datetime, functools
 from array import array
@@ -42,6 +44,10 @@ def lade_config(pfad):
     cfg["anhang_pgn"] = [p if os.path.isabs(p) else os.path.join(basis, p) for p in cfg["anhang_pgn"]]
     cfg["ich"] = chess.WHITE if cfg["farbe"].lower().startswith("w") else chess.BLACK
     cfg["start_san"] = [t for t in re.sub(r"\d+\.(\.\.)?", " ", cfg["start"]).split() if t]
+    cfg["cache_basis"] = os.path.splitext(cfg["ausgabe"])[0]        # Engine Zwischenspeicher bleibt im Arbeitsordner
+    if cfg.get("ergebnis"):                                          # fertige Dateien in einen eigenen Ordner
+        erg = os.path.abspath(os.path.expanduser(cfg["ergebnis"])); os.makedirs(erg, exist_ok=True)
+        cfg["ausgabe"] = os.path.join(erg, os.path.basename(cfg["ausgabe"]))
     cfg["basis"] = os.path.splitext(cfg["ausgabe"])[0]
     if os.environ.get("REPERTOIRE_SCHNELL"):
         cfg["tiefe"] = min(cfg["tiefe"], 10); cfg["fehler_tiefe"] = min(cfg["fehler_tiefe"], 8)
@@ -586,7 +592,7 @@ def _aufgabe(a):
         return schluessel, {"zuege": zuege, "s": _wert(i), "m": i["pv"][0].uci() if i.get("pv") else None}
 
 def stockfish(cfg, aufgaben):
-    pfad = cfg["basis"] + "_stockfish.json"
+    pfad = cfg["cache_basis"] + "_stockfish.json"
     cache = json.load(open(pfad)) if os.path.exists(pfad) else {}
     offen = [a for a in {a[1]: a for a in aufgaben}.values() if a[1] not in cache]
     print(f"  Stockfish: {len(aufgaben)} Aufgaben, davon neu zu rechnen: {len(offen)}", flush=True)

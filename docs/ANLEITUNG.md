@@ -51,7 +51,7 @@ Quellen:
 
 ## Alles mit einem Befehl: repertoire.sh
 
-`repertoire.sh` erledigt alle Schritte unten auf einmal: Python Umgebung einrichten, Partien streamen und filtern, `konfiguration.json` anlegen und das Repertoire bauen. Alles landet in einem Ordner.
+`repertoire.sh` erledigt alle Schritte unten auf einmal: Python Umgebung einrichten, Partien streamen und filtern, `konfiguration.json` anlegen und das Repertoire bauen. Die fertigen Dateien landen in einem Ergebnisordner (Standard: `repertoires` neben dem Tool Ordner, änderbar mit `--out`), Partien, Zwischenspeicher und `konfiguration.json` in `repertoires/arbeit/NAME`.
 
 ```bash
 bash repertoire.sh white "1. e4"
@@ -66,7 +66,8 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 | `--bank ORDNER` | Partienbank: jeder Monat wird einmal in eine Tabelle aller Partien umgewandelt (ohne Bullet und Bots, etwa 5 GB pro Monat). Weitere Analysen suchen nur noch darin, wenige Sekunden pro Monat. Mit `--archive` wird aus den gespeicherten Monatsdateien gebaut, sonst gestreamt | aus |
 | `--archive ORDNER` (`--archiv`) | Monatsdateien dort speichern statt nur streamen (je etwa 29 GB), vorhandene werden wiederverwendet | aus |
 | `--file DATEI` (`--datei`) | eigene Lichess Datei (`.pgn` oder `.pgn.zst`) statt Download | aus |
-| `--name NAME` | Ordnername für die Ergebnisse | aus Farbe und Zügen |
+| `--name NAME` | Name des Repertoires | aus Farbe und Zügen |
+| `--out ORDNER` | Ergebnisordner, Arbeitsdateien kommen nach `ORDNER/arbeit/NAME` (`--ausgabe`) | `repertoires` neben dem Tool Ordner |
 | `--repertoire PGN` | eigenes Repertoire, dessen Züge markiert werden | keins |
 | `--plain` | keine Springer Animation, schlichte Ausgabe (automatisch, wenn die Ausgabe in eine Datei geht) | aus |
 | `--quick` (`--schnell`) | schneller Probelauf mit geringer Stockfish Tiefe | aus |
@@ -168,7 +169,9 @@ Ausgaben:
 - `<ausgabe>.pgn`: das Repertoire
 - `<ausgabe>_quickstart.pgn`: die wahrscheinlichsten Linien bis Zug 14, je Linie ein Kapitel. Wo die Daten enden, geht es mit dem besten Zug von Stockfish weiter, das steht als Kommentar an der Stelle.
 - `<ausgabe>_strukturen.json`: die Bauernstrukturen mit allen Zahlen, Grundlage für eigene Erklärungstexte
-- `<ausgabe>_stockfish.json`: Zwischenspeicher der Engine
+- `<ausgabe>_stockfish.json`: Zwischenspeicher der Engine (bleibt im Arbeitsordner)
+
+Mit `"ergebnis": "ORDNER"` in der `konfiguration.json` landen die ersten drei Dateien in diesem Ordner, `repertoire.sh` trägt das selbst ein.
 
 ### Laufzeit und Fortschritt
 

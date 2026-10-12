@@ -48,9 +48,11 @@ Farbe ist `white` oder `black`, Optionen sind englisch. Die deutschen Namen von 
 
 ## Was du bekommst
 
-Einen Ordner mit dem Namen deines Repertoires, darin:
+Die Ergebnisse landen im Ordner `repertoires` neben dem Tool Ordner (änderbar mit `--out ORDNER`):
 - **`….pgn`**: dein Repertoire, ein Kapitel je Linie, sortiert danach, wie oft du sie in der Praxis bekommst (der Anteil steht im Kapitelnamen). Die Hauptvariante jedes Kapitels läuft mindestens bis Zug 15, seltene Linien stehen gebündelt am Ende. Am Linienende stehen Stockfish Bewertung, eine Musterpartie und blaue Pfeile für den Aufbau, der in der Praxis am besten gepunktet hat, am Kapitelende die häufigsten Fehler deiner Gegner samt Widerlegung. Dazu kommen die typischen Bauernstrukturen.
 - **`…_quickstart.pgn`**: die 15 wahrscheinlichsten Linien bis Zug 14, ideal zum Üben.
+
+Partien, Stockfish Zwischenspeicher und `konfiguration.json` bleiben in `repertoires/arbeit/NAME`, der Tool Ordner bleibt sauber.
 
 ## Gut zu wissen
 

@@ -16,7 +16,9 @@
 #                        games (about 5 GB per month). After that every further analysis with
 #                        any starting moves and rating range takes only seconds per month.
 #   --file FILE          your own Lichess file (.pgn or .pgn.zst) instead of the download (--datei)
-#   --name NAME          folder name for the results                (default from colour and moves)
+#   --name NAME          name of the repertoire                     (default from colour and moves)
+#   --out FOLDER         where the finished files go                (--ausgabe, default: folder "repertoires"
+#                        next to this tool folder). Working files go to FOLDER/arbeit/NAME.
 #   --repertoire PGN     your own repertoire, its moves get marked
 #   --quick              quick trial run with low Stockfish depth (--schnell)
 #   --plain              no animation, plain output (also automatic when the output goes to a file)
@@ -24,18 +26,19 @@
 #                        instead of English (N, B, R, Q). The moves stay standard PGN.
 #
 # Colour: white or black (weiss or schwarz work as well).
-# Everything lands in one folder named after the repertoire. Running again with the
-# same arguments reuses the games and only computes what is missing. For fine tuning
-# edit konfiguration.json in that folder and run again.
+# The finished files (repertoire, quickstart, structures) land in the results folder. Games,
+# Stockfish cache and konfiguration.json stay in the working folder FOLDER/arbeit/NAME.
+# Running again with the same arguments reuses them and only computes what is missing. For
+# fine tuning edit konfiguration.json there and run again.
 
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$DIR/animation.sh"
-hilfe() { sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; }
+hilfe() { sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; }
 
 [ $# -lt 2 ] && { hilfe; exit 1; }
 FARBE="$1"; START=$(printf '%s' "$2" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g'); shift 2
-ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; BANK=""; DATEI=""; NAME=""; REP=""; SCHNELL=""; NOTATION="en"
+ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; BANK=""; DATEI=""; NAME=""; ERG=""; REP=""; SCHNELL=""; NOTATION="en"
 while [ $# -gt 0 ]; do
   case "$1" in
     --elo) ELO="$2"; shift 2;;
@@ -45,6 +48,7 @@ while [ $# -gt 0 ]; do
     --bank|--gamebank|--partienbank) BANK="$2"; shift 2;;
     --file|--datei) DATEI="$2"; shift 2;;
     --name) NAME="$2"; shift 2;;
+    --out|--ausgabe) ERG="$2"; ERG_GEWAEHLT=1; shift 2;;
     --repertoire) REP="$2"; shift 2;;
     --quick|--schnell) SCHNELL=1; shift;;
     --notation) NOTATION="$2"; shift 2;;
@@ -64,7 +68,11 @@ if [ -z "$NAME" ]; then
   NAME="$( [ "$FARBE" = weiss ] && echo white || echo black )_$ZUEGE"
   [ ! -d "$PWD/$NAME" ] && [ -d "$PWD/${FARBE}_$ZUEGE" ] && NAME="${FARBE}_$ZUEGE"   # Ordner aus früheren Versionen
 fi
-OUT="$PWD/$NAME"
+# Ergebnisordner (fertige Dateien) und Arbeitsordner (Partien, Zwischenspeicher, Konfiguration)
+ERG="${ERG:-$(dirname "$DIR")/repertoires}"; ERG="${ERG/#\~/$HOME}"
+case "$ERG" in /*) ;; *) ERG="$PWD/$ERG";; esac
+OUT="$ERG/arbeit/$NAME"
+[ ! -f "$OUT/konfiguration.json" ] && [ -f "$PWD/$NAME/konfiguration.json" ] && OUT="$PWD/$NAME"   # Ordner aus früheren Versionen bleibt in Benutzung
 
 # Benötigte Programme prüfen
 fehlt=""
@@ -105,7 +113,8 @@ for t in sys.argv[1].split():
 PYEOF
 
 mkdir -p "$OUT"
-echo "Repertoire: $FARBE, Startzüge \"$START\", Elo $ELO_MIN bis $ELO_MAX, Ordner $OUT"
+echo "Repertoire: $FARBE, Startzüge \"$START\", Elo $ELO_MIN bis $ELO_MAX"
+echo "Arbeitsordner: $OUT"
 
 # 1. Partien holen und filtern
 filtern() {  # $1 Quelle (-i DATEI oder -m MONAT), $2 Wert, $3 Ziel ohne Endung, $4 Titel
@@ -188,7 +197,7 @@ PYEOF
   echo "Zusammen: $(wc -l < "$OUT/partien.tsv" | tr -d ' ') Partien aus $# Monaten"
 fi
 
-# 2. Konfiguration anlegen (nur beim ersten Mal)
+# 2. Konfiguration anlegen (beim ersten Mal) und den Ergebnisordner eintragen
 if [ ! -f "$OUT/konfiguration.json" ]; then
   "$PY" - "$OUT/konfiguration.json" "$FARBE" "$START" "$NAME" "$REP" "$NOTATION" <<'PYEOF'
 import json, os, sys
@@ -201,10 +210,19 @@ if rep: c["repertoire_pgn"] = os.path.abspath(rep)
 json.dump(c, open(pfad, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
 PYEOF
 fi
+"$PY" - "$OUT/konfiguration.json" "$ERG" "${ERG_GEWAEHLT:-}" <<'PYEOF'
+import json, sys
+pfad, erg, gewaehlt = sys.argv[1:]
+c = json.load(open(pfad, encoding="utf-8"))
+if gewaehlt or "ergebnis" not in c:                      # --out überschreibt, sonst nur nachtragen
+    c["ergebnis"] = erg
+    json.dump(c, open(pfad, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+PYEOF
 
 # 3. Repertoire bauen
 REPERTOIRE_SCHNELL="$SCHNELL" "$PY" "$DIR/repertoire.py" "$OUT/konfiguration.json"
 echo
-echo "Fertig. Deine Dateien liegen in: $OUT"
+ERGEBNIS=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("ergebnis",""))' "$OUT/konfiguration.json")
+echo "Fertig. Deine Dateien liegen in: $ERGEBNIS"
 echo "  $NAME.pgn              Repertoire"
 echo "  ${NAME}_quickstart.pgn   wahrscheinlichste Linien zum Üben"
