@@ -6,7 +6,7 @@
 
 Du sagst, welche Eröffnung du spielst. Das Werkzeug nimmt echte Lichess Partien aus deinem Elo Bereich und baut daraus ein Repertoire als PGN: was deine Gegner wirklich spielen, wo sie am häufigsten Fehler machen und wie Stockfish die Stellungen sieht. Die PGN öffnest du in einer Lichess Studie oder in ChessBase.
 
-[Schnellstart](#schnellstart-mac) · [Die Idee](#die-idee-dahinter) · [So arbeitest du damit](#so-arbeitest-du-am-besten-damit) · [Optionen](#optionen) · [Gut zu wissen](#gut-zu-wissen)
+[Schnellstart](#schnellstart-mac) · [Die Idee](#die-idee-dahinter) · [Partienbank](#die-partienbank) · [So arbeitest du damit](#so-arbeitest-du-am-besten-damit) · [Optionen](#optionen) · [Gut zu wissen](#gut-zu-wissen)
 
 ## Schnellstart (Mac)
 
@@ -62,6 +62,36 @@ Ein Repertoire aus dem Buch sagt dir, was in der Theorie am besten ist. Dieses W
 - **Fehler, die wirklich passieren.** Zu jeder Stellung siehst du, welche Fehler deine Gegner tatsächlich machen, wie oft, und was sie bestraft.
 - **Pläne, nicht nur Züge.** Jede Linie endet mit einer Musterpartie, dem am besten punktenden Aufbau und der Bauernstruktur, auf die du zusteuerst.
 - **Einmal sammeln, oft auswerten.** Der langsame Teil sind die Rohdaten. Sie werden einmal zur Partienbank. Jedes weitere Repertoire durchsucht nur noch die Bank, und die Stockfish Ergebnisse werden zwischengespeichert.
+
+## Die Partienbank
+
+Ein Lichess Monat ist eine PGN von etwa 29 GB (komprimiert), in der jede Partie vollständig steht. Für ein Repertoire brauchst du nur einen kleinen Teil jeder Partie. Die Partienbank behält genau den, eine Zeile pro Partie, mit zstd komprimiert. Sie wird einmal pro Monat gebaut und ersetzt dann das Original.
+
+**Was je Partie gespeichert wird:**
+
+| Feld | Bedeutung |
+| --- | --- |
+| Site | Link zur Partie auf Lichess |
+| White, Black | Spielernamen |
+| WhiteElo, BlackElo | Elo beider Spieler |
+| Result, Termination | Ergebnis und Art des Endes (normal, Zeit, ...) |
+| TimeControl, Date | Bedenkzeit (z. B. 180+2) und Datum |
+| Halbzüge, letzter Zug | Länge der Partie und ihr letzter Zug |
+| Erste 40 Halbzüge | Die Eröffnung, je 20 Züge pro Seite, in Standardnotation |
+
+**Was fehlt:** Uhrzeiten, Engine Bewertungen, Elo Änderungen, Eröffnungsnamen, Kommentare und die Züge zwischen dem 40. Halbzug und dem letzten Zug. Bullet Partien, Bot Partien und Partien ohne Elo oder Ergebnis sind gar nicht erst in der Bank.
+
+**Warum das besser ist als die große PGN zu behalten:**
+
+| | Originale Monatsdatei | Partienbank |
+| --- | --- | --- |
+| Größe pro Monat | etwa 29 GB | etwa 5 GB (Schätzung von einer 2 GB Probe) |
+| Format | PGN, muss Partie für Partie gelesen werden | eine Zeile pro Partie, gesucht wird nach den Eröffnungszügen |
+| Suche nach deinen Startzügen | etwa 8 Minuten (Schätzung) | unter einer Minute (Schätzung) |
+| Andere Eröffnung, Farbe oder Elo Bereich | alles nochmal lesen | dieselbe Tabelle nochmal durchsuchen |
+| Inhalt | alles, auch Bullet, Bots und Engine Daten | nur, was ein Repertoire braucht |
+
+Die Bank enthält alle Eröffnungen und alle Elo Bereiche, eine Bank reicht also für beliebig viele Repertoires. Der Preis: Die Partien sind nur bis zum 20. Zug bekannt (keine Endspielstudien), und Bullet Partien fehlen. Wer sie braucht, baut aus dem Original eine zweite Bank mit `bash gamebank.sh NEUERORDNER 2026-09 --archive ORDNER --with-bullet`, behalte die Monatsdateien also, bis du sicher bist, dass du sie nicht brauchst.
 
 ## So arbeitest du am besten damit
 

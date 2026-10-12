@@ -6,7 +6,7 @@
 
 Tell it which opening you play. The tool takes real Lichess games from your rating range and builds a repertoire PGN: what your opponents actually play, where they go wrong most often and how Stockfish sees the positions. Open the PGN in a Lichess study or in ChessBase.
 
-[Quick start](#quick-start-mac) · [The idea](#the-idea-behind-it) · [How to work with it](#how-to-work-with-it) · [Options](#options) · [Good to know](#good-to-know)
+[Quick start](#quick-start-mac) · [The idea](#the-idea-behind-it) · [Game bank](#the-game-bank) · [How to work with it](#how-to-work-with-it) · [Options](#options) · [Good to know](#good-to-know)
 
 ## Quick start (Mac)
 
@@ -62,6 +62,36 @@ A repertoire from a book tells you what is best in theory. This tool tells you w
 - **Mistakes that actually happen.** For every position you see which errors your opponents really make, how often, and what punishes them.
 - **Plans, not only moves.** Each line ends with a model game, the best scoring setup and the pawn structure you are heading for.
 - **Collect once, analyse often.** The slow part is the raw data. It becomes a game bank once. Every further repertoire only searches the bank, and Stockfish results are cached.
+
+## The game bank
+
+A Lichess month is a PGN of about 29 GB (compressed) with every game in full. For a repertoire you only need a small part of each game. The game bank keeps exactly that, one line per game, compressed with zstd. It is built once per month and then replaces the original.
+
+**What is stored per game:**
+
+| Field | Meaning |
+| --- | --- |
+| Site | Link to the game on Lichess |
+| White, Black | Player names |
+| WhiteElo, BlackElo | Ratings of both players |
+| Result, Termination | Result and how the game ended (normal, time forfeit, ...) |
+| TimeControl, Date | Time control (e.g. 180+2) and date |
+| Half moves, last move | Length of the game and its final move |
+| First 40 half moves | The opening, 20 moves for each side, in standard notation |
+
+**What is left out:** clock times, engine evaluations, rating changes, opening names, comments, and the moves between half move 40 and the last one. Bullet games, bot games and games without ratings or result are not in the bank at all.
+
+**Why this is better than keeping the big PGN:**
+
+| | Original monthly file | Game bank |
+| --- | --- | --- |
+| Size per month | about 29 GB | about 5 GB (estimate from a 2 GB sample) |
+| Format | PGN, has to be parsed game by game | one line per game, searched by the opening moves |
+| Search for your starting moves | about 8 minutes (estimate) | under a minute (estimate) |
+| Other opening, colour or rating range | read everything again | search the same table again |
+| Content | everything, including bullet, bots and engine data | only what a repertoire needs |
+
+The bank covers every opening and every rating range, so one bank serves any number of repertoires. The price: the games are only known up to move 20 (no endgame studies), and bullet games are missing. If you need them, build a second bank from the original with `bash gamebank.sh NEWFOLDER 2026-09 --archive FOLDER --with-bullet`, so keep the monthly files until you are sure you do not.
 
 ## How to work with it
 
