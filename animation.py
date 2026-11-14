@@ -1,6 +1,6 @@
 """Springer Animation für Wartezeiten.
 
-Ein Springer hüpft im L über ein zweireihiges Brett, hinter ihm füllen sich die
+Ein Springer hüpft über einen Balken, hinter ihm füllen sich die
 Felder. Dazu Prozent und geschätzte Restzeit. Ohne Terminal (Ausgabe in eine
 Datei umgeleitet) oder mit REPERTOIRE_PLAIN=1 bleibt alles schlicht.
 
@@ -36,30 +36,23 @@ class Springer:
         self.breite = shutil.get_terminal_size((80, 24)).columns
         self.spruenge = 12 if self.breite >= 100 else (8 if self.breite >= 70 else 4)   # Sprünge über das ganze Brett
 
-    def _reihen(self, anteil):
+    def _balken(self, anteil):
         k = min(int(anteil * self.spruenge + 1e-9), self.spruenge)
         spalten = 2 * self.spruenge + 1
-        sp, zeile = 2 * k, k % 2                            # Springerzug: zwei nach rechts, eine Reihe hoch oder runter
+        sp = 2 * k                                           # der Springer rückt pro Sprung zwei Felder vor
         figur = FIGUREN[self.tick % 2] if anteil < 1 else FIGUREN[0]
-        reihen = []
-        for r in (0, 1):
-            reihen.append("".join(figur if (r == zeile and c == sp) else (SPUR if c < sp or (c == sp and r != zeile) else LEER)
-                                  for c in range(spalten)))
-        return reihen
+        return SPUR * sp + figur + LEER * (spalten - sp - 1)
 
     def zeichne(self, anteil, info="", info_oben=""):
         anteil = max(0.0, min(anteil, 1.0)); self.tick += 1
-        r0, r1 = self._reihen(anteil)
-        z1 = f"  {self.name:<16} {r0}  {zahl(anteil * 100):>5} %  {info_oben}".rstrip()[:self.breite - 1]
-        z2 = f"  {'':<16} {r1}  {info}".rstrip()[:self.breite - 1]       # nie umbrechen, sonst verrutscht die Animation
-        out = ("\x1b[1A\r" if self.gezeichnet else "") + "\x1b[2K" + z1 + "\n\x1b[2K" + z2
-        sys.stderr.write(out); sys.stderr.flush(); self.gezeichnet = True
+        breite = shutil.get_terminal_size((80, 24)).columns      # bei jedem Bild neu, falls das Fenster sich ändert
+        zeile = f"  {self.name:<16} {self._balken(anteil)}  {zahl(anteil * 100):>5} %  {info_oben}  {info}".rstrip()
+        sys.stderr.write("\r\x1b[2K" + zeile[:breite - 1]); sys.stderr.flush(); self.gezeichnet = True
 
     def fertig(self, text=None):
         text = text or f"fertig in {dauer(time.time() - self.t0)}"
-        r0, _ = self._reihen(1.0)
-        vorn = "\x1b[1A\r" if self.gezeichnet else ""
-        sys.stderr.write(f"{vorn}\x1b[2K" + f"  {self.name:<16} {r0}  {text}"[:self.breite - 1] + "\n\x1b[2K"); sys.stderr.flush()
+        breite = shutil.get_terminal_size((80, 24)).columns
+        sys.stderr.write("\r\x1b[2K" + f"  {self.name:<16} {self._balken(1.0)}  {text}"[:breite - 1] + "\n"); sys.stderr.flush()
         self.gezeichnet = False
 
 
