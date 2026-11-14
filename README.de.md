@@ -31,17 +31,14 @@ Ohne git: oben auf GitHub „Code“ und dann „Download ZIP“ wählen, entpac
 bash repertoire.sh white "1. e4"
 ```
 
-Beim ersten Lauf richtet das Skript alles Nötige selbst ein. Die Farbe ist `white` oder `black`, Züge schreibst du in englischer Notation. Für Schwarz gehört deine eigene Antwort mit in die Startzüge.
+Die Farbe ist `white` oder `black`, Züge schreibst du in englischer Notation. Für Schwarz gehört deine eigene Antwort mit in die Startzüge.
 
 ```bash
 # Schwarz gegen 1.d4 mit 1...d5, Gegner mit Elo 1600 bis 2000, erst ein schneller Probelauf
 bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
-
-# Mehr Partien: die letzten drei Monate statt einem
-bash repertoire.sh white "1. e4" --months 3
 ```
 
-**Für den ersten vollen Lauf empfehlen wir `--archive`.** Der erste Download ist riesig (etwa 29 GB pro Monat) und dauert Stunden, da kann leicht etwas dazwischenkommen. Mit `--archive` läuft der Download über mehrere Verbindungen und setzt nach einem Abbruch dort fort, wo er stand, wenn du denselben Befehl noch einmal startest. Ohne `--archive` beginnt ein unterbrochener Monat wieder bei null. Nimm zusätzlich `--bank`, dann braucht das nächste Repertoire den Download gar nicht mehr:
+Für den ersten vollen Lauf nimm `--archive`. Der Download ist etwa 29 GB pro Monat groß und dauert Stunden, da kann leicht etwas dazwischenkommen. Mit `--archive` nutzt er mehrere Verbindungen und setzt nach einem Abbruch fort, wenn du denselben Befehl noch einmal startest. Ohne `--archive` beginnt ein unterbrochener Monat bei null. Dazu `--bank`, dann überspringen spätere Repertoires den Download:
 
 ```bash
 bash repertoire.sh white "1. e4" --months 3 --bank ~/gamebank --archive ~/lichess --delete-archive
@@ -49,65 +46,35 @@ bash repertoire.sh white "1. e4" --months 3 --bank ~/gamebank --archive ~/liches
 
 ## Was du bekommst
 
-Die Ergebnisse landen im Ordner `repertoires` neben dem Tool Ordner (änderbar mit `--out`).
+Die Ergebnisse landen im Ordner `repertoires` neben dem Tool Ordner (mit `--out` änderbar).
 
 | Datei | Inhalt |
 | --- | --- |
 | `NAME.pgn` | Dein Repertoire, ein Kapitel je Linie, sortiert danach, wie oft du sie bekommst. Die Hauptvarianten laufen mindestens bis Zug 15, seltene Linien stehen gebündelt am Ende. |
-| `NAME_quickstart.pgn` | Die 15 wahrscheinlichsten Linien bis Zug 14, ideal zum Üben. |
+| `NAME_quickstart.pgn` | Die 15 wahrscheinlichsten Linien bis Zug 14, zum Üben. |
 | `NAME_strukturen.json` | Die typischen Bauernstrukturen mit allen Zahlen. |
 
-Am Linienende stehen Stockfish Bewertung, eine Musterpartie und blaue Pfeile für den Aufbau, der in der Praxis am besten gepunktet hat. Am Kapitelende stehen die häufigsten Fehler deiner Gegner samt Widerlegung. Partien, Zwischenspeicher der Engine und `konfiguration.json` bleiben in `repertoires/arbeit/NAME`, der Tool Ordner bleibt sauber.
+Am Linienende stehen Stockfish Bewertung, eine Musterpartie und blaue Pfeile für den Aufbau, der in der Praxis am besten gepunktet hat. Am Kapitelende stehen die häufigsten Fehler deiner Gegner samt Widerlegung. Partien, Zwischenspeicher der Engine und `konfiguration.json` bleiben in `repertoires/arbeit/NAME`.
 
 ## Die Idee dahinter
 
-Ein Repertoire aus dem Buch sagt dir, was in der Theorie am besten ist. Dieses Werkzeug sagt dir, was dir auf deinem Niveau wirklich begegnet und wie du darauf reagierst.
-
-- **Erst die Praxis, dann die Engine.** Die Partien bestimmen, was hineinkommt und in welcher Reihenfolge. Stockfish prüft und korrigiert, er wählt nicht die Themen.
-- **Stellungen statt Zugfolgen.** Verschiedene Zugfolgen, die zur selben Stellung führen, werden zusammengezählt.
-- **Fehler, die wirklich passieren.** Zu jeder Stellung siehst du, welche Fehler deine Gegner tatsächlich machen, wie oft, und was sie bestraft.
-- **Pläne, nicht nur Züge.** Jede Linie endet mit einer Musterpartie, dem am besten punktenden Aufbau und der Bauernstruktur, auf die du zusteuerst.
-- **Einmal sammeln, oft auswerten.** Der langsame Teil sind die Rohdaten. Sie werden einmal zur Partienbank. Jedes weitere Repertoire durchsucht nur noch die Bank, und die Stockfish Ergebnisse werden zwischengespeichert.
+Ein Repertoire aus dem Buch sagt dir, was in der Theorie am besten ist. Dieses Werkzeug sagt dir, was dir auf deinem Niveau wirklich begegnet. Die Partien entscheiden, was hineinkommt und in welcher Reihenfolge, Stockfish prüft und korrigiert nur. Verschiedene Zugfolgen, die in dieselbe Stellung führen, werden zusammengezählt. Zu jeder Stellung siehst du, welche Fehler deine Gegner wirklich machen und was sie widerlegt. Der langsame Teil sind die Rohdaten: Sie werden einmal zur Partienbank, und jedes weitere Repertoire durchsucht nur noch die Bank.
 
 ## Die Partienbank
 
-Ein Lichess Monat ist eine PGN von etwa 29 GB (komprimiert), in der jede Partie vollständig steht. Für ein Repertoire brauchst du nur einen kleinen Teil jeder Partie. Die Partienbank behält genau den, eine Zeile pro Partie, mit zstd komprimiert. Sie wird einmal pro Monat gebaut und ersetzt dann das Original.
+Ein Lichess Monat ist eine PGN von etwa 29 GB (komprimiert). Für ein Repertoire brauchst du nur einen kleinen Teil jeder Partie. Die Bank behält deshalb eine mit zstd komprimierte Zeile pro Partie: den Link zur Partie, die Spielernamen, beide Elo Zahlen, Ergebnis und Art des Endes, Bedenkzeit und Datum, Partielänge, letzten Zug und die ersten 40 Halbzüge. Es fehlen Uhrzeiten, Engine Bewertungen, Elo Änderungen, Eröffnungsnamen, Kommentare und die Züge zwischen dem 40. Halbzug und dem letzten. Bullet Partien, Bot Partien und Partien ohne Elo oder Ergebnis sind gar nicht erst drin.
 
-**Was je Partie gespeichert wird:**
+Ein Monat schrumpft auf etwa 5 GB (Schätzung von einer 2 GB Probe), und die Suche nach deinen Startzügen dauert unter einer Minute statt etwa 8 (Schätzung). Eine Bank enthält alle Eröffnungen, Farben und Elo Bereiche und reicht für beliebig viele Repertoires.
 
-| Feld | Bedeutung |
-| --- | --- |
-| Site | Link zur Partie auf Lichess |
-| White, Black | Spielernamen |
-| WhiteElo, BlackElo | Elo beider Spieler |
-| Result, Termination | Ergebnis und Art des Endes (normal, Zeit, ...) |
-| TimeControl, Date | Bedenkzeit (z. B. 180+2) und Datum |
-| Halbzüge, letzter Zug | Länge der Partie und ihr letzter Zug |
-| Erste 40 Halbzüge | Die Eröffnung, je 20 Züge pro Seite, in Standardnotation |
-
-**Was fehlt:** Uhrzeiten, Engine Bewertungen, Elo Änderungen, Eröffnungsnamen, Kommentare und die Züge zwischen dem 40. Halbzug und dem letzten Zug. Bullet Partien, Bot Partien und Partien ohne Elo oder Ergebnis sind gar nicht erst in der Bank.
-
-**Warum das besser ist als die große PGN zu behalten:**
-
-| | Originale Monatsdatei | Partienbank |
-| --- | --- | --- |
-| Größe pro Monat | etwa 29 GB | etwa 5 GB (Schätzung von einer 2 GB Probe) |
-| Format | PGN, muss Partie für Partie gelesen werden | eine Zeile pro Partie, gesucht wird nach den Eröffnungszügen |
-| Suche nach deinen Startzügen | etwa 8 Minuten (Schätzung) | unter einer Minute (Schätzung) |
-| Andere Eröffnung, Farbe oder Elo Bereich | alles nochmal lesen | dieselbe Tabelle nochmal durchsuchen |
-| Inhalt | alles, auch Bullet, Bots und Engine Daten | nur, was ein Repertoire braucht |
-
-Die Bank enthält alle Eröffnungen und alle Elo Bereiche, eine Bank reicht also für beliebig viele Repertoires. Der Preis: Die Partien sind nur bis zum 20. Zug bekannt (keine Endspielstudien), und Bullet Partien fehlen. Wer sie braucht, baut aus dem Original eine zweite Bank mit `bash gamebank.sh NEUERORDNER 2026-09 --archive ORDNER --with-bullet`, behalte die Monatsdateien also, bis du sicher bist, dass du sie nicht brauchst.
+Der Preis: Die Partien sind nur bis zum 20. Zug bekannt (keine Endspielstudien), und Bullet fehlt. Für Bullet baust du aus dem Original eine zweite Bank mit `bash gamebank.sh NEUERORDNER 2026-09 --archive ORDNER --with-bullet`. Behalte die Monatsdateien, bis du sicher bist, dass du sie nicht brauchst.
 
 ## So arbeitest du am besten damit
 
-1. **Günstig ausprobieren.** Starte zuerst mit `--quick`. Falsche Startzüge fallen auf, bevor etwas heruntergeladen wird.
-2. **Der erste volle Lauf baut die Partienbank.** Hänge `--months 3 --bank ORDNER --archive ORDNER --delete-archive` an und lass `--quick` weg. Jede 29 GB Monatsdatei wird gelöscht, sobald ihre Tabelle fertig ist.
-3. **In der richtigen Reihenfolge lesen.** Zuerst die Quickstart Datei, dann die Hauptdatei als Nachschlagewerk.
-4. **In kleinen Schritten lernen.** Importiere die PGN in eine Lichess Studie und lerne von oben nach unten, die Reihenfolge ist die Reihenfolge der Wichtigkeit.
-5. **Anpassen und neu laufen lassen.** Die Einstellungen stehen in `konfiguration.json` im Arbeitsordner. Ein neuer Lauf nutzt Partien und Engine Ergebnisse wieder.
-6. **Mit dem eigenen Repertoire vergleichen** über `--repertoire PGN`. Deine Züge werden markiert.
-7. **Ab und zu auffrischen.** Neue Monate kommen in dieselbe Bank.
+1. Starte zuerst mit `--quick`. Falsche Startzüge fallen auf, bevor etwas heruntergeladen wird.
+2. Der erste volle Lauf baut die Partienbank: Hänge `--months 3 --bank ORDNER --archive ORDNER --delete-archive` an und lass `--quick` weg. Jede Monatsdatei wird gelöscht, sobald ihre Tabelle fertig ist.
+3. Lies zuerst die Quickstart Datei, dann die Hauptdatei als Nachschlagewerk. Importiere die PGN in eine Lichess Studie und lerne von oben nach unten, denn die Reihenfolge ist die Reihenfolge der Wichtigkeit.
+4. Die Einstellungen stehen in `konfiguration.json` im Arbeitsordner, ein neuer Lauf nutzt Partien und Engine Ergebnisse wieder. Mit `--repertoire PGN` werden deine eigenen Züge markiert.
+5. Neue Monate kommen in dieselbe Bank.
 
 Die Zahlen sind Statistik von Onlinepartien in deinem Elo Bereich, ohne Bullet und Bots. Linien mit wenigen Partien sind unsicher, Bewertungen entstehen bei fester Tiefe, und die Musterpartie ist ein Beispiel, kein Beweis.
 
@@ -118,7 +85,7 @@ Die Zahlen sind Statistik von Onlinepartien in deinem Elo Bereich, ohne Bullet u
 | `--elo VON-BIS` | Elo Bereich beider Spieler | 1800-2499 |
 | `--month JJJJ-MM` / `--month A..B` | Ein Monat oder ein Bereich | letzter voller Monat |
 | `--months N` | Die letzten N vollen Monate | aus |
-| `--bank ORDNER` | Partienbank: jeder Monat wird einmal zu einer kompakten Tabelle (etwa 5 GB pro Monat), spätere Analysen brauchen Sekunden pro Monat | aus |
+| `--bank ORDNER` | Partienbank: jeder Monat wird einmal zu einer kompakten Tabelle (etwa 5 GB), spätere Analysen brauchen Sekunden pro Monat | aus |
 | `--archive ORDNER` | Monatsdateien (je etwa 29 GB) behalten statt nur zu streamen | aus |
 | `--delete-archive` / `--keep-archive` | Monatsdateien löschen, sobald die Bank sie hat, oder nie. Ohne beides wirst du einmal am Start gefragt | fragen |
 | `--out ORDNER` | Wohin die fertigen Dateien kommen | `repertoires` neben dem Tool |
@@ -127,15 +94,14 @@ Die Zahlen sind Statistik von Onlinepartien in deinem Elo Bereich, ohne Bullet u
 | `--notation de` | Deutsche Figurenbuchstaben (S, L, T, D) in Namen und Kommentaren | englisch |
 | `--plain` | Ohne Animation | Animation an |
 
-Die vollständige Liste mit allen Feineinstellungen steht in der [ausführlichen Anleitung](docs/ANLEITUNG.md).
+Die vollständige Liste steht in der [ausführlichen Anleitung](docs/ANLEITUNG.md).
 
 ## Gut zu wissen
 
-- **Dauer:** Der Download ist der langsame Teil, denn Lichess drosselt jede einzelne Verbindung. Bei einer Messung waren es mit einer Verbindung 0,6 MB/s (etwa 7 Stunden pro Monat), mit `--archive` und 4 Verbindungen 6 MB/s (etwa 1,5 bis 2 Stunden). Dein Wert kann abweichen. Danach rechnet Stockfish 15 bis 60 Minuten. Mit `--quick` siehst du das Ergebnis in wenigen Minuten, sobald die Partien da sind.
-- **Schneller laden:** Nur mit `--archive` lädt das Tool über mehrere Verbindungen gleichzeitig (Standard 4). Ohne `--archive` wird die Monatsdatei über eine Verbindung gestreamt und ist deutlich langsamer. `REPERTOIRE_VERBINDUNGEN=6 bash repertoire.sh ...` ändert die Zahl, `1` schaltet auf eine Verbindung zurück. Ein abgebrochener Download (Strg+C) setzt beim nächsten Start dort fort, wo er war.
-- **Nochmal starten:** Mit denselben Angaben nutzt das Skript die schon geladenen Partien und rechnet nur, was fehlt. Ein Monat, der schon in der Bank ist, wird nie neu gebaut.
-- **Beim Warten:** Bei jedem Schritt hüpft ein Springer über ein kleines Brett, dazu Prozent und Restzeit.
-- **Linux:** Statt Homebrew `sudo apt install python3-venv zstd pv mawk stockfish`, der Rest ist gleich.
+- Dauer: Der Download ist der langsame Teil, denn Lichess drosselt jede einzelne Verbindung. Bei einer Messung waren es mit einer Verbindung 0,6 MB/s (etwa 7 Stunden pro Monat), mit `--archive` und 4 Verbindungen 6 MB/s (etwa 1,5 bis 2 Stunden). Dein Wert kann abweichen. Danach rechnet Stockfish 15 bis 60 Minuten. Mit `--quick` siehst du das Ergebnis in wenigen Minuten, sobald die Partien da sind.
+- Verbindungen: Mehrere Verbindungen gibt es nur mit `--archive` (Standard 4). Ohne wird die Datei über eine Verbindung gestreamt und ist deutlich langsamer. `REPERTOIRE_VERBINDUNGEN=6 bash repertoire.sh ...` ändert die Zahl, `1` nutzt eine einzige. Nach Strg+C setzt der Download dort fort, wo er war.
+- Nochmal starten: Mit denselben Angaben nutzt das Skript die schon geladenen Partien und rechnet nur, was fehlt. Ein Monat, der schon in der Bank ist, wird nie neu gebaut.
+- Linux: Statt Homebrew `sudo apt install python3-venv zstd pv mawk stockfish`, der Rest ist gleich.
 
 ## Lizenz
 
