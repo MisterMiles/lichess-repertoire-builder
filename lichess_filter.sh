@@ -4,7 +4,6 @@
 #
 # Examples:
 #   bash lichess_filter.sh -s "1. e4" -i lichess_db_standard_rated_2026-09.pgn.zst -o games.pgn --tsv games.tsv
-#   bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o games.pgn --tsv games.tsv
 #   bash lichess_filter.sh -s "1. e4" -i file.pgn.zst --elo-one 2500 --elo-min 2300 --elo-max 3500 -o strong.pgn
 #
 # Options (German names in brackets work as well):
@@ -13,8 +12,7 @@
 #   --move-color white|black  who plays the move from --contains (--zug-farbe, default white)
 #   --by-move N             at the latest in move N (--bis-zug, default 5)
 #   --not-start "MOVES"     exclude games starting like this (--nicht-start)
-#   -i, --input FILE        .pgn.zst or .pgn (local)
-#   -m, --month YYYY-MM     instead stream from database.lichess.org, nothing is stored (--monat)
+#   -i, --input FILE        .pgn.zst or .pgn (required)
 #   -o, --output FILE       output PGN (required)
 #   --tsv FILE              also write a compact table for repertoire.py
 #   --elo-min N             both players at least N              (default 1800)
@@ -26,7 +24,7 @@
 #   --plain                 no animation, plain output (also: REPERTOIRE_PLAIN=1)
 
 set -o pipefail
-START=""; ENTH=""; ZFARBE="weiss"; BISZUG=5; NSTART=""; INPUT=""; MONAT=""; OUT=""; TSV=""
+START=""; ENTH=""; ZFARBE="weiss"; BISZUG=5; NSTART=""; INPUT=""; OUT=""; TSV=""
 ELO_MIN=1800; ELO_MAX=2499; ELO_EINER=0; BULLET=0; BOTS=0; PLIES=40
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$DIR/animation.sh"
@@ -39,7 +37,6 @@ while [ $# -gt 0 ]; do
     --move-color|--zug-farbe) ZFARBE="$2"; shift 2;;
     --by-move|--bis-zug) BISZUG="$2"; shift 2;;
     --not-start|--nicht-start) NSTART="$2"; shift 2;;
-    -m|--month|--monat) MONAT="$2"; shift 2;;
     -o|--output) OUT="$2"; shift 2;;
     --tsv) TSV="$2"; shift 2;;
     --elo-min) ELO_MIN="$2"; shift 2;;
@@ -49,7 +46,7 @@ while [ $# -gt 0 ]; do
     --with-bots|--mit-bots) BOTS=1; shift;;
     --plies|--halbzuege) PLIES="$2"; shift 2;;
     --plain) export REPERTOIRE_PLAIN=1; shift;;
-    -h|--help|--hilfe) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
+    -h|--help|--hilfe) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
     *) echo "Unknown option: $1"; exit 1;;
   esac
 done
@@ -58,25 +55,21 @@ done
 START=$(printf '%s' "$START" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g')
 NSTART=$(printf '%s' "$NSTART" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g')
 [ -z "$OUT" ] && { echo "Bitte Ausgabedatei angeben: -o datei.pgn"; exit 1; }
-[ -z "$INPUT" ] && [ -z "$MONAT" ] && { echo "Bitte -i DATEI oder -m JJJJ-MM angeben"; exit 1; }
+[ -z "$INPUT" ] && { echo "Bitte -i DATEI angeben"; exit 1; }
 
 AWK=awk
 command -v gawk >/dev/null 2>&1 && AWK=gawk
 command -v mawk >/dev/null 2>&1 && AWK=mawk
 
-URL="https://database.lichess.org/standard/lichess_db_standard_rated_${MONAT}.pgn.zst"
-TITEL="${REPERTOIRE_TITEL:-Filtern $MONAT}"
+TITEL="${REPERTOIRE_TITEL:-Filtern}"
 ANIM=""; anim_an && ANIM=1
 PVDATEI="$OUT.fortschritt"; INFODATEI="$OUT.info"
 
 # Quelle als Datenstrom
 quelle() {
   if [ -n "$ANIM" ]; then
-    if [ -n "$MONAT" ]; then strom_url "$URL" "$PVDATEI" | zstd -dc
-    elif [[ "$INPUT" == *.zst ]]; then strom_datei "$INPUT" "$PVDATEI" | zstd -dc
+    if [[ "$INPUT" == *.zst ]]; then strom_datei "$INPUT" "$PVDATEI" | zstd -dc
     else strom_datei "$INPUT" "$PVDATEI"; fi
-  elif [ -n "$MONAT" ]; then
-    curl -fL --retry 5 --retry-delay 10 "$URL" | zstd -dc
   elif [[ "$INPUT" == *.zst ]]; then
     if command -v pv >/dev/null 2>&1; then pv "$INPUT" | zstd -dc; else zstd -dc "$INPUT"; fi
   else
@@ -138,7 +131,7 @@ END { flush(); printf "Fertig: %d Partien geprüft, %d behalten\n", total, kept 
 '
 }
 
-if [ -n "$MONAT" ] || [[ "$INPUT" == *.zst ]]; then
+if [[ "$INPUT" == *.zst ]]; then
   command -v zstd >/dev/null 2>&1 || { echo "zstd fehlt: brew install zstd"; exit 1; }
 fi
 

@@ -36,10 +36,10 @@ bash repertoire.sh white "1. e4"
 bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 ```
 
-For the first full run, use `--archive`. The download is about 29 GB per month and takes hours, so it may well get interrupted. With `--archive` it uses several connections and continues where it stopped when you rerun the command. Without it, an interrupted month starts from zero. Add `--bank` so later repertoires skip the download:
+The first full run downloads each month once (about 29 GB, takes hours) with several connections. If it is interrupted, rerun the same command and it continues where it stopped. Each month becomes a game bank table in `~/lichess-data/bank`, so later repertoires skip the download:
 
 ```bash
-bash repertoire.sh white "1. e4" --months 3 --bank ~/gamebank --archive ~/lichess --delete-archive
+bash repertoire.sh white "1. e4" --months 3
 ```
 
 ## What you get
@@ -64,12 +64,12 @@ A Lichess month is a PGN of about 29 GB compressed. A repertoire needs only a sm
 
 A month shrinks to about 5 GB (estimate from a 2 GB sample), and a search for your starting moves takes under a minute instead of about 8 (estimate). One bank covers every opening, colour and rating range, so it serves any number of repertoires.
 
-The price: games are known only up to move 20, so there are no endgame studies, and bullet is missing. For bullet, build a second bank from the original with `bash gamebank.sh NEWFOLDER 2026-09 --archive FOLDER --with-bullet`. Keep the monthly files until you are sure you do not need it.
+The price: games are known only up to move 20, so there are no endgame studies, and bullet is missing. For bullet, build a second bank from the original with `bash gamebank.sh 2026-09 --data NEWFOLDER --keep-raw --with-bullet`. Keep the monthly files with `--keep-raw` until you are sure you do not need them.
 
 ## How to work with it
 
 1. Run with `--quick` first. Wrong starting moves show up before anything is downloaded.
-2. The first full run builds the game bank: add `--months 3 --bank FOLDER --archive FOLDER --delete-archive` and leave out `--quick`. Each monthly file is deleted once its table is built.
+2. The first full run builds the game bank: add `--months 3` and leave out `--quick`. Each monthly file is deleted once its table is built (`--keep-raw` keeps it).
 3. Read the quickstart file first, then the main file as a reference. Import the PGN into a Lichess study and learn from the top, since the order is the order of importance.
 4. Settings are in `konfiguration.json` in the working folder, and a rerun reuses games and engine results. `--repertoire PGN` marks your own moves.
 5. New months go into the same bank.
@@ -83,9 +83,8 @@ The numbers are statistics of online games in your rating range, without bullet 
 | `--elo FROM-TO` | Rating range of both players | 1800-2499 |
 | `--month YYYY-MM` / `--month A..B` | One month or a range | last full month |
 | `--months N` | The last N full months | off |
-| `--bank FOLDER` | Game bank: every month becomes a compact table once (about 5 GB), later analyses take seconds per month | off |
-| `--archive FOLDER` | Keep the monthly files (about 29 GB each) instead of only streaming them | off |
-| `--delete-archive` / `--keep-archive` | Delete monthly files once the bank has them, or never. Without either you are asked once at the start | ask |
+| `--data FOLDER` | Where the game bank (`bank/`, about 5 GB per month) and the resumable downloads (`download/`) live. Later analyses take seconds per month | `~/lichess-data` |
+| `--keep-raw` | Keep the 29 GB monthly file after its bank table is built. Otherwise it is deleted once the table is verified, the bank stays | off |
 | `--out FOLDER` | Where the finished files go | `repertoires` next to the tool |
 | `--repertoire PGN` | Your own repertoire, its moves get marked | off |
 | `--quick` | Trial run with low Stockfish depth | off |
@@ -96,8 +95,8 @@ The full list is in the [full guide](docs/GUIDE.md).
 
 ## Good to know
 
-- Time: the download is the slow part, because Lichess throttles each connection. In one measurement a single connection gave 0.6 MB/s (about 7 hours per month) and `--archive` with 4 connections gave 6 MB/s (about 1.5 to 2 hours). Yours may differ. Stockfish then needs 15 to 60 minutes. With `--quick` you see a result within minutes once the games are in.
-- Connections: several connections work only with `--archive` (default 4). Without it the file is streamed over one connection and is much slower. `REPERTOIRE_VERBINDUNGEN=6 bash repertoire.sh ...` changes the number, `1` uses a single connection. After Ctrl+C the download continues where it stopped.
+- Time: the download is the slow part, because Lichess throttles each connection. In one measurement a single connection gave 0.6 MB/s (about 7 hours per month) and 4 connections gave 6 MB/s (about 1.5 to 2 hours). Yours may differ. Stockfish then needs 15 to 60 minutes. With `--quick` you see a result within minutes once the games are in.
+- Connections: the download uses 4 connections by default. `REPERTOIRE_VERBINDUNGEN=6 bash repertoire.sh ...` changes the number, `1` uses a single connection. After Ctrl+C the download continues where it stopped.
 - Running again: with the same arguments the script reuses games and computes only what is missing. A month already in the bank is never built again.
 - Linux: instead of Homebrew use `sudo apt install python3-venv zstd pv mawk stockfish`, the rest is the same.
 

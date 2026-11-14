@@ -35,10 +35,8 @@ laden() {
   curl -fL -C - --retry 5 --retry-delay 10 -# -o "$2" "$1"
 }
 
-# Datei oder URL als Datenstrom auf stdout, mit Fortschritt in einer pv Datei.
-#   strom_datei DATEI PVDATEI    strom_url URL PVDATEI
+# Datei als Datenstrom auf stdout, mit Fortschritt in einer pv Datei.   strom_datei DATEI PVDATEI
 # Die Animation dazu startet der Aufrufer:  anim_start TITEL --pv PVDATEI  ...  anim_stopp
 strom_datei() { pv -n -i 0.5 -s "$(dateigroesse "$1")" "$1" 2>"$2"; }
-strom_url() { curl -sfL --retry 5 --retry-delay 10 "$1" | pv -n -i 0.5 -s "$(urlgroesse "$1")" 2>"$2"; }
 
 trap anim_stopp EXIT

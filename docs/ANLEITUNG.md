@@ -11,8 +11,8 @@ Baut für Weiß oder Schwarz ein kommentiertes Repertoire als PGN: die häufigst
 Immer nötig:
 - **Python 3** mit dem Paket `chess` (python-chess). Getestet mit 3.13, ab 3.9 sollte es laufen.
 - **Stockfish**. Name oder voller Pfad steht in der Konfiguration unter `"stockfish"`.
-- **Für das Filterskript:** `bash`, `awk` (`mawk` ist deutlich schneller, das Skript nimmt automatisch das schnellste vorhandene), `zstd`, `curl` für `-m`, optional `pv` für die Fortschrittsanzeige.
-- **Speicherplatz:** Eine Monatsdatei hat etwa 29 GB. Mit `-m` wird gestreamt und nichts gespeichert. `repertoire.sh` streamt ebenfalls, außer mit `--archive`.
+- **Für das Filterskript:** `bash`, `awk` (`mawk` ist deutlich schneller, das Skript nimmt automatisch das schnellste vorhandene), `zstd`, optional `pv` für die Fortschrittsanzeige.
+- **Speicherplatz:** Eine Monatsdatei hat etwa 29 GB. `repertoire.sh` und `gamebank.sh` laden jeden Monat einmal nach `~/lichess-data/download` (fortsetzbar) und löschen ihn nach dem Bau der Banktabelle, außer mit `--keep-raw`.
 - **Arbeitsspeicher:** Alle gefilterten Partien werden auf einmal geladen. Noch nicht gemessen, sehr große Datensätze können viel RAM brauchen.
 
 ### macOS
@@ -51,7 +51,7 @@ Quellen:
 
 ## Alles mit einem Befehl: repertoire.sh
 
-`repertoire.sh` erledigt alle Schritte unten auf einmal: Python Umgebung einrichten, Partien streamen und filtern, `konfiguration.json` anlegen und das Repertoire bauen. Die fertigen Dateien landen in einem Ergebnisordner (Standard: `repertoires` neben dem Tool Ordner, änderbar mit `--out`), Partien, Zwischenspeicher und `konfiguration.json` in `repertoires/arbeit/NAME`.
+`repertoire.sh` erledigt alle Schritte unten auf einmal: Python Umgebung einrichten, jeden Monat einmal laden, die Partienbank bauen und Partien filtern, `konfiguration.json` anlegen und das Repertoire bauen. Die fertigen Dateien landen in einem Ergebnisordner (Standard: `repertoires` neben dem Tool Ordner, änderbar mit `--out`), Partien, Zwischenspeicher und `konfiguration.json` in `repertoires/arbeit/NAME`.
 
 ```bash
 bash repertoire.sh white "1. e4"
@@ -63,8 +63,8 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 | `--elo VON-BIS` | Elo Bereich beider Spieler | 1800-2499 |
 | `--month JJJJ-MM` (`--monat`) | Lichess Monat, mehrere als `JJJJ-MM..JJJJ-MM` | letzter voller Monat |
 | `--months N` (`--monate`) | die letzten N vollen Monate | aus |
-| `--bank ORDNER` | Partienbank: jeder Monat wird einmal in eine Tabelle aller Partien umgewandelt (ohne Bullet und Bots, etwa 5 GB pro Monat). Weitere Analysen suchen nur noch darin, wenige Sekunden pro Monat. Mit `--archive` wird aus den gespeicherten Monatsdateien gebaut, sonst gestreamt | aus |
-| `--archive ORDNER` (`--archiv`) | Monatsdateien dort speichern statt nur streamen (je etwa 29 GB), vorhandene werden wiederverwendet | aus |
+| `--data ORDNER` | Wo Partienbank (`bank/`, etwa 5 GB pro Monat, ohne Bullet und Bots) und fortsetzbare Downloads (`download/`) liegen. Weitere Analysen suchen nur noch in der Bank, wenige Sekunden pro Monat | `~/lichess-data` |
+| `--keep-raw` | Die 29 GB Monatsdatei nach dem Bau der Banktabelle behalten | aus (wird nach geprüfter Tabelle gelöscht) |
 | `--file DATEI` (`--datei`) | eigene Lichess Datei (`.pgn` oder `.pgn.zst`) statt Download | aus |
 | `--name NAME` | Name des Repertoires | aus Farbe und Zügen |
 | `--out ORDNER` | Ergebnisordner, Arbeitsdateien kommen nach `ORDNER/arbeit/NAME` (`--ausgabe`) | `repertoires` neben dem Tool Ordner |
@@ -79,40 +79,36 @@ Die folgenden Abschnitte beschreiben die einzelnen Schritte für volle Kontrolle
 
 ## Partienbank für viele Analysen
 
-`gamebank.sh` wandelt Lichess Monate einmalig in kompakte Tabellen aller Partien um, ohne Bullet und Bots, mit allen Eröffnungen und Elo Bereichen und den ersten 40 Halbzügen. `repertoire.sh --bank ORDNER` ruft es automatisch auf und sucht danach nur noch in der Bank.
+`gamebank.sh` wandelt Lichess Monate einmalig in kompakte Tabellen aller Partien um, ohne Bullet und Bots, mit allen Eröffnungen und Elo Bereichen und den ersten 40 Halbzügen. `repertoire.sh` ruft es automatisch auf und sucht danach nur noch in der Bank.
 
 ```bash
-bash gamebank.sh ~/gamebank 2026-07 2026-08 2026-09
-bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess    # aus gespeicherten Monatsdateien
-bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess --loeschen   # und danach jede löschen
+bash gamebank.sh 2026-07 2026-08 2026-09
+bash gamebank.sh 2026-09 --keep-raw --data ~/mein-schach-ordner    # Monatsdatei behalten, anderer Ordner
 ```
 
 | Option | Bedeutung | Standard |
 |---|---|---|
-| `--archive ORDNER` (`--archiv`) | Monatsdateien von dort lesen, fehlende dorthin laden | streamen |
+| `--data ORDNER` (`--daten`) | Bank in `ORDNER/bank`, Downloads in `ORDNER/download` | `~/lichess-data` |
+| `--keep-raw` (`--rohdaten-behalten`) | Monatsdatei nach dem Bau der Tabelle behalten | löschen |
 | `--with-bullet` (`--mit-bullet`) | Bullet Partien mit aufnehmen | ohne |
 | `--jobs N` (`--teile`) | parallele Prozesse | CPU Kerne minus eins, höchstens 8 |
 
-**Monatsdateien löschen:** Ist ein Monat in der Bank, braucht man sein 29 GB Original nicht mehr. Mit `--loeschen` (`--delete-archive`) wird jede Monatsdatei direkt gelöscht, nachdem ihre Banktabelle gebaut ist und `zstd -t` besteht, es liegt also höchstens eine Monatsdatei gleichzeitig da. Mit `--behalten` (`--keep-archive`) wird nichts gelöscht. Ohne beides fragt das Skript einmal zu Beginn (es listet vorhandene Dateien mit Größe), und ohne Terminal löscht es nichts. Ein Monat, der schon in der Bank ist, wird nie neu gebaut, eine übrig gebliebene Monatsdatei davon wird auf dieselbe Weise aufgeräumt. Die Bank merkt sich nicht, ob sie mit oder ohne Bullet gebaut wurde, das entscheidest du beim Bauen.
+**Monatsdateien löschen:** Ist ein Monat in der Bank, braucht man sein 29 GB Original nicht mehr. Standardmäßig wird jede Monatsdatei direkt gelöscht, nachdem ihre Banktabelle gebaut ist und `zstd -t` besteht, es liegt also höchstens eine Monatsdatei gleichzeitig da. Mit `--keep-raw` wird nichts gelöscht. Ein Monat, der schon in der Bank ist, wird nie neu gebaut, eine übrig gebliebene Monatsdatei davon wird auf dieselbe Weise aufgeräumt. Die Bank merkt sich nicht, ob sie mit oder ohne Bullet gebaut wurde, das entscheidest du beim Bauen.
 
 Gemessen an einem 2 GB Ausschnitt aus September 2026: 63 % der Partien bleiben übrig (ohne Bullet und Bots), die Bank ist etwa 2,4 % so groß wie die entpackte PGN. Hochgerechnet sind das rund 5 GB pro Monat statt 29 GB, die Suche nach Startzügen dauert dann unter einer Minute pro Monat statt rund 8 Minuten.
 
 ## 1. Partien filtern
 
-Monatsdatei laden (etwa 29 GB) oder direkt streamen, dann nach Startzügen filtern. Züge werden in englischer Notation angegeben.
+Eine vorhandene Monatsdatei nach Startzügen filtern (`repertoire.sh` und `gamebank.sh` laden sie selbst). Züge werden in englischer Notation angegeben.
 
 ```bash
-# lokale Datei
 bash lichess_filter.sh -s "1. e4" -i lichess_db_standard_rated_2026-09.pgn.zst -o partien.pgn --tsv partien.tsv
-
-# direkt von Lichess streamen, nichts Großes wird gespeichert
-bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o partien.pgn --tsv partien.tsv
 ```
 
 | Option | Bedeutung | Standard |
 |---|---|---|
 | `-s` | Startzüge, z. B. `"1. e4 c5 2. Nf3"` | Pflicht, außer bei `--contains` |
-| `-i` / `-m` | Datei (`.pgn.zst` oder `.pgn`) oder Monat `JJJJ-MM` | eins davon |
+| `-i` | Datei (`.pgn.zst` oder `.pgn`) | Pflicht |
 | `-o` | Ausgabe PGN | Pflicht |
 | `--tsv` | zusätzlich Tabelle für `repertoire.py` | aus |
 | `--elo-min` / `--elo-max` | beide Spieler in diesem Bereich | 1800 / 2499 |

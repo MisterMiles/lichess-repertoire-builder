@@ -36,10 +36,10 @@ bash repertoire.sh white "1. e4"
 bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 ```
 
-Für den ersten vollen Lauf nimm `--archive`. Der Download ist etwa 29 GB pro Monat groß und dauert Stunden, da kann leicht etwas dazwischenkommen. Mit `--archive` nutzt er mehrere Verbindungen und setzt nach einem Abbruch fort, wenn du denselben Befehl noch einmal startest. Ohne `--archive` beginnt ein unterbrochener Monat bei null. Dazu `--bank`, dann überspringen spätere Repertoires den Download:
+Der erste volle Lauf lädt jeden Monat einmal herunter (etwa 29 GB, dauert Stunden), mit mehreren Verbindungen. Bei einem Abbruch startest du denselben Befehl noch einmal, dann geht es dort weiter. Jeder Monat wird zu einer Partienbank Tabelle in `~/lichess-data/bank`, spätere Repertoires überspringen den Download:
 
 ```bash
-bash repertoire.sh white "1. e4" --months 3 --bank ~/gamebank --archive ~/lichess --delete-archive
+bash repertoire.sh white "1. e4" --months 3
 ```
 
 ## Was du bekommst
@@ -64,12 +64,12 @@ Ein Lichess Monat ist eine PGN von etwa 29 GB (komprimiert). Für ein Repertoire
 
 Ein Monat schrumpft auf etwa 5 GB (Schätzung von einer 2 GB Probe), und die Suche nach deinen Startzügen dauert unter einer Minute statt etwa 8 (Schätzung). Eine Bank enthält alle Eröffnungen, Farben und Elo Bereiche und reicht für beliebig viele Repertoires.
 
-Der Preis: Die Partien sind nur bis zum 20. Zug bekannt (keine Endspielstudien), und Bullet fehlt. Für Bullet baust du aus dem Original eine zweite Bank mit `bash gamebank.sh NEUERORDNER 2026-09 --archive ORDNER --with-bullet`. Behalte die Monatsdateien, bis du sicher bist, dass du sie nicht brauchst.
+Der Preis: Die Partien sind nur bis zum 20. Zug bekannt (keine Endspielstudien), und Bullet fehlt. Für Bullet baust du aus dem Original eine zweite Bank mit `bash gamebank.sh 2026-09 --data NEUERORDNER --keep-raw --with-bullet`. Behalte die Monatsdateien mit `--keep-raw`, bis du sicher bist, dass du sie nicht brauchst.
 
 ## So arbeitest du am besten damit
 
 1. Starte zuerst mit `--quick`. Falsche Startzüge fallen auf, bevor etwas heruntergeladen wird.
-2. Der erste volle Lauf baut die Partienbank: Hänge `--months 3 --bank ORDNER --archive ORDNER --delete-archive` an und lass `--quick` weg. Jede Monatsdatei wird gelöscht, sobald ihre Tabelle fertig ist.
+2. Der erste volle Lauf baut die Partienbank: Hänge `--months 3` an und lass `--quick` weg. Jede Monatsdatei wird gelöscht, sobald ihre Tabelle fertig ist (`--rohdaten-behalten` behält sie).
 3. Lies zuerst die Quickstart Datei, dann die Hauptdatei als Nachschlagewerk. Importiere die PGN in eine Lichess Studie und lerne von oben nach unten, denn die Reihenfolge ist die Reihenfolge der Wichtigkeit.
 4. Die Einstellungen stehen in `konfiguration.json` im Arbeitsordner, ein neuer Lauf nutzt Partien und Engine Ergebnisse wieder. Mit `--repertoire PGN` werden deine eigenen Züge markiert.
 5. Neue Monate kommen in dieselbe Bank.
@@ -83,9 +83,8 @@ Die Zahlen sind Statistik von Onlinepartien in deinem Elo Bereich, ohne Bullet u
 | `--elo VON-BIS` | Elo Bereich beider Spieler | 1800-2499 |
 | `--month JJJJ-MM` / `--month A..B` | Ein Monat oder ein Bereich | letzter voller Monat |
 | `--months N` | Die letzten N vollen Monate | aus |
-| `--bank ORDNER` | Partienbank: jeder Monat wird einmal zu einer kompakten Tabelle (etwa 5 GB), spätere Analysen brauchen Sekunden pro Monat | aus |
-| `--archive ORDNER` | Monatsdateien (je etwa 29 GB) behalten statt nur zu streamen | aus |
-| `--delete-archive` / `--keep-archive` | Monatsdateien löschen, sobald die Bank sie hat, oder nie. Ohne beides wirst du einmal am Start gefragt | fragen |
+| `--data ORDNER` | Wo Partienbank (`bank/`, etwa 5 GB pro Monat) und fortsetzbare Downloads (`download/`) liegen. Spätere Analysen brauchen Sekunden pro Monat | `~/lichess-data` |
+| `--keep-raw` | Die 29 GB Monatsdatei nach dem Bau der Banktabelle behalten. Sonst wird sie gelöscht, sobald die Tabelle geprüft ist, die Bank bleibt | aus |
 | `--out ORDNER` | Wohin die fertigen Dateien kommen | `repertoires` neben dem Tool |
 | `--repertoire PGN` | Dein eigenes Repertoire, seine Züge werden markiert | aus |
 | `--quick` | Probelauf mit geringer Stockfish Tiefe | aus |
@@ -96,8 +95,8 @@ Die vollständige Liste steht in der [ausführlichen Anleitung](docs/ANLEITUNG.m
 
 ## Gut zu wissen
 
-- Dauer: Der Download ist der langsame Teil, denn Lichess drosselt jede einzelne Verbindung. Bei einer Messung waren es mit einer Verbindung 0,6 MB/s (etwa 7 Stunden pro Monat), mit `--archive` und 4 Verbindungen 6 MB/s (etwa 1,5 bis 2 Stunden). Dein Wert kann abweichen. Danach rechnet Stockfish 15 bis 60 Minuten. Mit `--quick` siehst du das Ergebnis in wenigen Minuten, sobald die Partien da sind.
-- Verbindungen: Mehrere Verbindungen gibt es nur mit `--archive` (Standard 4). Ohne wird die Datei über eine Verbindung gestreamt und ist deutlich langsamer. `REPERTOIRE_VERBINDUNGEN=6 bash repertoire.sh ...` ändert die Zahl, `1` nutzt eine einzige. Nach Strg+C setzt der Download dort fort, wo er war.
+- Dauer: Der Download ist der langsame Teil, denn Lichess drosselt jede einzelne Verbindung. Bei einer Messung waren es mit einer Verbindung 0,6 MB/s (etwa 7 Stunden pro Monat), mit 4 Verbindungen 6 MB/s (etwa 1,5 bis 2 Stunden). Dein Wert kann abweichen. Danach rechnet Stockfish 15 bis 60 Minuten. Mit `--quick` siehst du das Ergebnis in wenigen Minuten, sobald die Partien da sind.
+- Verbindungen: Der Download nutzt standardmäßig 4 Verbindungen. `REPERTOIRE_VERBINDUNGEN=6 bash repertoire.sh ...` ändert die Zahl, `1` nutzt eine einzige. Nach Strg+C setzt der Download dort fort, wo er war.
 - Nochmal starten: Mit denselben Angaben nutzt das Skript die schon geladenen Partien und rechnet nur, was fehlt. Ein Monat, der schon in der Bank ist, wird nie neu gebaut.
 - Linux: Statt Homebrew `sudo apt install python3-venv zstd pv mawk stockfish`, der Rest ist gleich.
 

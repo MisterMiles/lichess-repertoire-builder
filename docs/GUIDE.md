@@ -13,8 +13,8 @@ The scripts, their console output and the generated PGN comments are in German. 
 Always needed:
 - **Python 3** with the package `chess` (python-chess). Tested with 3.13, 3.9 or newer should work.
 - **Stockfish**. Set its name or full path in the configuration under `"stockfish"`.
-- **For the filter script:** `bash`, `awk` (`mawk` is much faster, the script picks the fastest one available), `zstd`, `curl` for `-m`, optionally `pv` for a progress display.
-- **Disk:** a monthly file is about 29 GB. With `-m` the file is streamed and not stored. `repertoire.sh` streams as well, unless you use `--archive`.
+- **For the filter script:** `bash`, `awk` (`mawk` is much faster, the script picks the fastest one available), `zstd`, optionally `pv` for a progress display.
+- **Disk:** a monthly file is about 29 GB. `repertoire.sh` and `gamebank.sh` download each month once into `~/lichess-data/download` (resumable) and delete it after the bank table is built, unless you use `--keep-raw`.
 - **Memory:** all filtered games are loaded at once. Not measured yet, very large data sets may need a lot of RAM.
 
 ### macOS
@@ -53,7 +53,7 @@ Sources:
 
 ## The one command way: repertoire.sh
 
-`repertoire.sh` runs all steps below in one go: it sets up a Python environment, streams and filters the games, writes `konfiguration.json` and builds the repertoire. The finished files land in a results folder (default: `repertoires` next to the tool folder, change with `--out`), games, engine cache and `konfiguration.json` in `repertoires/arbeit/NAME`.
+`repertoire.sh` runs all steps below in one go: it sets up a Python environment, downloads each month once, builds the game bank and filters the games, writes `konfiguration.json` and builds the repertoire. The finished files land in a results folder (default: `repertoires` next to the tool folder, change with `--out`), games, engine cache and `konfiguration.json` in `repertoires/arbeit/NAME`.
 
 ```bash
 bash repertoire.sh white "1. e4"
@@ -65,8 +65,8 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 | `--elo FROM-TO` | rating range of both players | 1800-2499 |
 | `--month YYYY-MM` (`--monat`) | Lichess month, several as `YYYY-MM..YYYY-MM` | last full month |
 | `--months N` (`--monate`) | the last N full months | off |
-| `--bank FOLDER` | game bank: every month is turned once into a table of all games (no bullet, no bots, about 5 GB per month). Further analyses only search in it, a few seconds per month. With `--archive` the bank is built from the stored monthly files, otherwise streamed | off |
-| `--archive FOLDER` (`--archiv`) | keep the monthly files there instead of only streaming (about 29 GB each), existing ones are reused | off |
+| `--data FOLDER` | where the game bank (`bank/`, about 5 GB per month, no bullet, no bots) and the resumable downloads (`download/`) live. Further analyses only search the bank, a few seconds per month | `~/lichess-data` |
+| `--keep-raw` | keep the 29 GB monthly file after its bank table is built | off (deleted once the table is verified) |
 | `--file FILE` (`--datei`) | your own Lichess file (`.pgn` or `.pgn.zst`) instead of the download | off |
 | `--name NAME` | name of the repertoire | from colour and moves |
 | `--out FOLDER` | results folder, working files go to `FOLDER/arbeit/NAME` (`--ausgabe`) | `repertoires` next to the tool folder |
@@ -81,40 +81,36 @@ The sections below describe the single steps for full control.
 
 ## Game bank for many analyses
 
-`gamebank.sh` turns Lichess months once into compact tables of all games, without bullet and bots, with every opening and rating range and the first 40 half moves. `repertoire.sh --bank FOLDER` calls it automatically and afterwards only searches the bank.
+`gamebank.sh` turns Lichess months once into compact tables of all games, without bullet and bots, with every opening and rating range and the first 40 half moves. `repertoire.sh` calls it automatically and afterwards only searches the bank.
 
 ```bash
-bash gamebank.sh ~/gamebank 2026-07 2026-08 2026-09
-bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess    # from stored monthly files
-bash gamebank.sh ~/gamebank 2026-09 --archive ~/lichess --delete-archive   # and delete each one afterwards
+bash gamebank.sh 2026-07 2026-08 2026-09
+bash gamebank.sh 2026-09 --keep-raw --data ~/my-chess-data    # keep the monthly file, other folder
 ```
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--archive FOLDER` (`--archiv`) | read monthly files from there, download missing ones into it | stream |
+| `--data FOLDER` (`--daten`) | bank in `FOLDER/bank`, downloads in `FOLDER/download` | `~/lichess-data` |
+| `--keep-raw` (`--rohdaten-behalten`) | keep the monthly file after its table is built | delete it |
 | `--with-bullet` (`--mit-bullet`) | include bullet games | without |
 | `--jobs N` (`--teile`) | parallel processes | CPU cores minus one, at most 8 |
 
-**Deleting the monthly files:** once a month is in the bank you do not need its 29 GB original any more. With `--delete-archive` each monthly file is deleted right after its bank table is built and passes `zstd -t`, so at most one monthly file exists at a time. With `--keep-archive` nothing is deleted. Without either option the script asks once at the start (it lists existing files with their size), and without a terminal it deletes nothing. A month that is already in the bank is never built again, and a leftover monthly file of it is cleaned up the same way. The bank does not record whether it was built with or without bullet games, so decide that when you build it.
+**Deleting the monthly files:** once a month is in the bank you do not need its 29 GB original any more. By default each monthly file is deleted right after its bank table is built and passes `zstd -t`, so at most one monthly file exists at a time. With `--keep-raw` nothing is deleted. A month that is already in the bank is never built again, and a leftover monthly file of it is cleaned up the same way. The bank does not record whether it was built with or without bullet games, so decide that when you build it.
 
 Measured on a 2 GB slice of September 2026: 63 % of the games remain (no bullet, no bots), the bank is about 2.4 % of the unpacked PGN. Extrapolated that is roughly 5 GB per month instead of 29 GB, and searching for starting moves then takes under a minute per month instead of about 8 minutes.
 
 ## 1. Filter games
 
-Download a monthly file (about 29 GB) or stream it directly, then filter by your starting moves. Moves use English notation.
+Filter a monthly file you already have by your starting moves (`repertoire.sh` and `gamebank.sh` download it for you). Moves use English notation.
 
 ```bash
-# local file
 bash lichess_filter.sh -s "1. e4" -i lichess_db_standard_rated_2026-09.pgn.zst -o games.pgn --tsv games.tsv
-
-# stream straight from Lichess, nothing large is stored
-bash lichess_filter.sh -s "1. d4 d5 2. c4" -m 2026-09 -o games.pgn --tsv games.tsv
 ```
 
 | Option | Meaning | Default |
 |---|---|---|
 | `-s` | starting moves, e.g. `"1. e4 c5 2. Nf3"` | required unless `--contains` is used |
-| `-i` / `-m` | file (`.pgn.zst` or `.pgn`) or month `YYYY-MM` | one of them |
+| `-i` | file (`.pgn.zst` or `.pgn`) | required |
 | `-o` | output PGN | required |
 | `--tsv` | also write the table for `repertoire.py` | off |
 | `--elo-min` / `--elo-max` | both players within this range | 1800 / 2499 |

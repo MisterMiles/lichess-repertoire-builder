@@ -3,21 +3,21 @@
 #
 #   bash repertoire.sh white "1. e4"
 #   bash repertoire.sh black "1. d4 d5" --elo 1600-2000
-#   bash repertoire.sh white "1. e4" --months 3 --bank ~/gamebank
+#   bash repertoire.sh white "1. e4" --months 3
 #
 # Options (German names in brackets work as well):
 #   --elo FROM-TO        rating range of both players             (default 1800-2499)
 #   --month YYYY-MM      Lichess month (--monat)                  (default: last full month)
 #                        several months: --month 2026-07..2026-09
 #   --months N           the last N full months (--monate), e.g. --months 3
-#   --archive FOLDER     keep the monthly files there instead of only streaming them
-#                        (--archiv, about 29 GB each). Existing files are reused.
-#   --bank FOLDER        game bank: every month is turned once into a compact table of all
-#                        games (about 5 GB per month). After that every further analysis with
-#                        any starting moves and rating range takes only seconds per month.
-#                        With --bank the monthly files can be deleted as soon as the bank has them:
-#                        --delete-archive (--loeschen) or --keep-archive (--behalten). Without
-#                        either, you are asked once at the start.
+#   --data FOLDER        where the game bank and the downloads live (--daten)
+#                        (default ~/lichess-data). Every month is downloaded once (about 29 GB,
+#                        resumable: rerun the same command after an interruption) and turned into a
+#                        compact table of all games (about 5 GB per month) in FOLDER/bank. After that every
+#                        further analysis with any starting moves and rating range takes only
+#                        seconds per month.
+#   --keep-raw           keep the 29 GB monthly file after its bank table is built (--rohdaten-behalten)
+#                        (default: it is deleted once the table is built and verified; the bank stays)
 #   --file FILE          your own Lichess file (.pgn or .pgn.zst) instead of the download (--datei)
 #   --name NAME          name of the repertoire                     (default from colour and moves)
 #   --out FOLDER         where the finished files go                (--ausgabe, default: folder "repertoires"
@@ -41,12 +41,14 @@ hilfe() { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; }
 
 [ $# -lt 2 ] && { hilfe; exit 1; }
 FARBE="$1"; START=$(printf '%s' "$2" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g'); shift 2
-ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; BANK=""; DATEI=""; NAME=""; ERG=""; REP=""; SCHNELL=""; NOTATION="en"; LOESCHEN=""
+ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; BANK=""; DATEI=""; NAME=""; ERG=""; REP=""; SCHNELL=""; NOTATION="en"; LOESCHEN=""; DATEN=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --elo) ELO="$2"; shift 2;;
     --month|--monat) MONAT="$2"; shift 2;;
     --months|--monate) ANZAHL="$2"; shift 2;;
+    --data|--daten) DATEN="$2"; shift 2;;
+    --keep-raw|--rohdaten-behalten) LOESCHEN="--keep-archive"; shift;;
     --archive|--archiv) ARCHIV="$2"; shift 2;;
     --bank|--gamebank|--partienbank) BANK="$2"; shift 2;;
     --delete-archive|--loeschen) LOESCHEN="--delete-archive"; shift;;
@@ -62,6 +64,11 @@ while [ $# -gt 0 ]; do
     *) echo "Unknown option: $1 (bash repertoire.sh --help shows all options)"; exit 1;;
   esac
 done
+# One data folder: bank and downloads. The old --bank/--archive still win when given.
+DATEN="${DATEN:-$HOME/lichess-data}"
+[ -z "$BANK" ] && BANK="$DATEN/bank"
+[ -z "$ARCHIV" ] && ARCHIV="$DATEN/download"
+[ -z "$LOESCHEN" ] && LOESCHEN="--delete-archive"
 case "$FARBE" in
   weiss|weiß|white|w) FARBE=weiss;;
   schwarz|black|b|s) FARBE=schwarz;;
@@ -153,49 +160,26 @@ print(" ".join(f"{y:04d}-{m:02d}" for y, m in out))
 PYEOF
   ) || { echo "Monat bitte als JJJJ-MM, JJJJ-MM..JJJJ-MM oder mit --monate N angeben"; exit 1; }
   set -- $MONATE; echo "Monate: $* ($# insgesamt)"
-  mkdir -p "$OUT/monate"; [ -n "$ARCHIV" ] && mkdir -p "$ARCHIV"
+  mkdir -p "$OUT/monate"
   # Startzüge ohne Zugnummern, so wie sie in der Tabelle stehen
   AWK=awk; command -v gawk >/dev/null 2>&1 && AWK=gawk; command -v mawk >/dev/null 2>&1 && AWK=mawk
   STARTZ=$(printf '%s' "$START" | sed -E 's/[0-9]+\.+ ?/ /g' | tr -s ' ' | sed -E 's/^ //; s/ $//')
-  if [ -n "$BANK" ]; then
-    BANKARGS=(); [ -n "$ARCHIV" ] && BANKARGS=(--archive "$ARCHIV"); [ -n "$LOESCHEN" ] && BANKARGS+=("$LOESCHEN")
-    bash "$DIR/gamebank.sh" "$BANK" $MONATE "${BANKARGS[@]}"
-  fi
+  bash "$DIR/gamebank.sh" $MONATE --bank "$BANK" --archive "$ARCHIV" "$LOESCHEN"
   for M in $MONATE; do
     ZIEL="$OUT/monate/partien_${M}_elo${ELO_MIN}-${ELO_MAX}"
-    ALT="$OUT/monate/partien_$M"      # Name aus früheren Versionen, immer mit Elo 1800-2499
-    if [ ! -s "$ZIEL.tsv" ] && [ -s "$ALT.tsv" ] && [ "$ELO_MIN-$ELO_MAX" = "1800-2499" ]; then
-      mv "$ALT.tsv" "$ZIEL.tsv"; [ -f "$ALT.pgn" ] && mv "$ALT.pgn" "$ZIEL.pgn"
-    fi
     if [ -s "$ZIEL.tsv" ]; then echo "$M: schon gefiltert, wird wiederverwendet."; continue; fi
-    if [ -n "$BANK" ]; then
-      echo "$M: suche in der Partienbank"
-      ANIM=""; anim_an && { ANIM=1; : > "$ZIEL.fortschritt"; anim_start "Suche $M" --pv "$ZIEL.fortschritt"; }
-      if [ -n "$ANIM" ]; then
-        strom_datei "$BANK/lichess_$M.tsv.zst" "$ZIEL.fortschritt"
-      else
-        cat "$BANK/lichess_$M.tsv.zst"
-      fi | zstd -dc | LC_ALL=C "$AWK" -F'\t' -v start="$STARTZ" -v emin="$ELO_MIN" -v emax="$ELO_MAX" '
-        BEGIN { s = start " "; L = length(s) }
-        substr($12 " ", 1, L) == s { a = $4 + 0; b = $5 + 0; lo = (a < b ? a : b); hi = (a < b ? b : a)
-                                     if (lo >= emin && hi <= emax) print }' > "$ZIEL.tsv.tmp"
-      anim_stopp; rm -f "$ZIEL.fortschritt"; mv "$ZIEL.tsv.tmp" "$ZIEL.tsv"
-      echo "$M: $(wc -l < "$ZIEL.tsv" | tr -d ' ') Partien"
-      continue
-    fi
-    URL="https://database.lichess.org/standard/lichess_db_standard_rated_${M}.pgn.zst"
-    if [ -n "$ARCHIV" ]; then
-      F="$ARCHIV/lichess_db_standard_rated_${M}.pgn.zst"
-      if [ ! -s "$F" ]; then
-        echo "$M: lade Monatsdatei nach $F (etwa 29 GB, abgebrochene Downloads werden fortgesetzt)"
-        laden "$URL" "$F.part" "Download $M" || { echo "$M: Download fehlgeschlagen. Nochmal starten setzt ihn fort."; exit 1; }
-        mv "$F.part" "$F"
-      fi
-      echo "$M: filtere $F"; filtern -i "$F" "$ZIEL" "Filtern $M"
+    echo "$M: suche in der Partienbank"
+    ANIM=""; anim_an && { ANIM=1; : > "$ZIEL.fortschritt"; anim_start "Suche $M" --pv "$ZIEL.fortschritt"; }
+    if [ -n "$ANIM" ]; then
+      strom_datei "$BANK/lichess_$M.tsv.zst" "$ZIEL.fortschritt"
     else
-      echo "$M: streame und filtere (etwa 29 GB, nichts davon wird gespeichert)"
-      filtern -m "$M" "$ZIEL" "Laden und filtern $M"
-    fi
+      cat "$BANK/lichess_$M.tsv.zst"
+    fi | zstd -dc | LC_ALL=C "$AWK" -F'\t' -v start="$STARTZ" -v emin="$ELO_MIN" -v emax="$ELO_MAX" '
+      BEGIN { s = start " "; L = length(s) }
+      substr($12 " ", 1, L) == s { a = $4 + 0; b = $5 + 0; lo = (a < b ? a : b); hi = (a < b ? b : a)
+                                   if (lo >= emin && hi <= emax) print }' > "$ZIEL.tsv.tmp"
+    anim_stopp; rm -f "$ZIEL.fortschritt"; mv "$ZIEL.tsv.tmp" "$ZIEL.tsv"
+    echo "$M: $(wc -l < "$ZIEL.tsv" | tr -d ' ') Partien"
   done
   # Tabelle aus allen gewünschten Monaten neu zusammensetzen
   for M in $MONATE; do cat "$OUT/monate/partien_${M}_elo${ELO_MIN}-${ELO_MAX}.tsv"; done > "$OUT/partien.tsv.tmp" && mv "$OUT/partien.tsv.tmp" "$OUT/partien.tsv"
