@@ -17,7 +17,7 @@
 #                     start (only in a terminal). Without a terminal nothing is deleted.
 #   --keep-archive    never delete monthly files (--behalten)
 #   --with-bullet     include bullet games (--mit-bullet, default: without)
-#   --jobs N          parallel processes (--teile, default: CPU cores minus one, at most 8)
+#   --jobs N          parallel processes (--teile, default: CPU cores minus one, at most 10)
 #   --plain           no animation, plain output (also: REPERTOIRE_PLAIN=1)
 
 set -e -o pipefail
@@ -38,11 +38,11 @@ while [ $# -gt 0 ]; do
     *) echo "Unknown option: $1"; exit 1;;
   esac
 done
-for p in zstd tee mkfifo; do command -v $p >/dev/null 2>&1 || { echo "$p fehlt"; exit 1; }; done
+for p in zstd python3 mkfifo; do command -v $p >/dev/null 2>&1 || { echo "$p fehlt"; exit 1; }; done
 AWK=awk; command -v gawk >/dev/null 2>&1 && AWK=gawk; command -v mawk >/dev/null 2>&1 && AWK=mawk
 if [ -z "$TEILE" ]; then
   KERNE=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 2)
-  TEILE=$((KERNE - 1)); [ "$TEILE" -lt 1 ] && TEILE=1; [ "$TEILE" -gt 8 ] && TEILE=8
+  TEILE=$((KERNE - 1)); [ "$TEILE" -lt 1 ] && TEILE=1; [ "$TEILE" -gt 10 ] && TEILE=10
 fi
 mkdir -p "$BANK"; [ -n "$ARCHIV" ] && mkdir -p "$ARCHIV"
 
@@ -93,17 +93,17 @@ for M in $MONATE; do
   PIDS=""; ZIELE=""
   for i in $(seq 0 $((TEILE - 1))); do
     mkfifo "$TMP/f$i"
-    ( LC_ALL=C "$AWK" -v plies=40 -v bullet="$BULLET" -v teil="$i" -v teile="$TEILE" -f "$DIR/gamebank.awk" < "$TMP/f$i" | zstd -q -5 > "$TMP/t$i.zst" ) &
-    PIDS="$PIDS $!"; [ "$i" -gt 0 ] && ZIELE="$ZIELE $TMP/f$i"
+    ( LC_ALL=C "$AWK" -v plies=40 -v bullet="$BULLET" -f "$DIR/gamebank.awk" < "$TMP/f$i" | zstd -q -5 > "$TMP/t$i.zst" ) &
+    PIDS="$PIDS $!"; ZIELE="$ZIELE $TMP/f$i"
   done
   START=$(date +%s)
   if anim_an; then
     anim_start "Partienbank $M" --pv "$TMP/fortschritt"
-    if [ -n "$QUELLE" ]; then strom_datei "$QUELLE" "$TMP/fortschritt"; else strom_url "$URL" "$TMP/fortschritt"; fi | zstd -dc | tee $ZIELE > "$TMP/f0"
+    if [ -n "$QUELLE" ]; then strom_datei "$QUELLE" "$TMP/fortschritt"; else strom_url "$URL" "$TMP/fortschritt"; fi | zstd -dc | python3 "$DIR/verteilen.py" "$TEILE" $ZIELE
   elif [ -n "$QUELLE" ]; then
-    if command -v pv >/dev/null 2>&1; then pv "$QUELLE" | zstd -dc; else zstd -dc "$QUELLE"; fi | tee $ZIELE > "$TMP/f0"
+    if command -v pv >/dev/null 2>&1; then pv "$QUELLE" | zstd -dc; else zstd -dc "$QUELLE"; fi | python3 "$DIR/verteilen.py" "$TEILE" $ZIELE
   else
-    curl -fL --retry 5 --retry-delay 10 -# "$URL" | zstd -dc | tee $ZIELE > "$TMP/f0"
+    curl -fL --retry 5 --retry-delay 10 -# "$URL" | zstd -dc | python3 "$DIR/verteilen.py" "$TEILE" $ZIELE
   fi
   FEHLER=0; for p in $PIDS; do wait "$p" || FEHLER=1; done
   anim_stopp
