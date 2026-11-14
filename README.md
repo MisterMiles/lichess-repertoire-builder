@@ -125,7 +125,8 @@ The full list with all fine tuning settings is in the [full guide](docs/GUIDE.md
 
 ## Good to know
 
-- **Time:** one Lichess month is streamed from the internet (about 29 GB, nothing of it is stored). That takes 30 minutes to a few hours, then Stockfish needs 15 to 60 minutes. With `--quick` you see a result within minutes once the games are in.
+- **Time:** the download is the slow part, because Lichess throttles every single connection. In one measurement one connection gave 0.6 MB/s (about 7 hours per month), and `--archive` with 4 connections gave 6 MB/s (about 1.5 to 2 hours). Your numbers may differ. After that Stockfish needs 15 to 60 minutes. With `--quick` you see a result within minutes once the games are in.
+- **Faster download:** only with `--archive` does the tool use several connections at once (default 4). Without `--archive` the monthly file is streamed over one connection and is much slower. `REPERTOIRE_VERBINDUNGEN=6 bash repertoire.sh ...` changes the number, `1` goes back to a single connection. An interrupted download (Ctrl+C) continues where it stopped the next time you start.
 - **Running again:** with the same arguments the script reuses games and only computes what is missing. A month that is already in the bank is never built again.
 - **While you wait:** a knight hops across a small board for every step, with percent and time left.
 - **Linux:** instead of Homebrew use `sudo apt install python3-venv zstd pv mawk stockfish`, the rest is the same.

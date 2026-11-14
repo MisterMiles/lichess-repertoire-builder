@@ -125,7 +125,8 @@ Die vollständige Liste mit allen Feineinstellungen steht in der [ausführlichen
 
 ## Gut zu wissen
 
-- **Dauer:** Ein Lichess Monat wird aus dem Internet gestreamt (etwa 29 GB, nichts davon wird gespeichert). Das dauert 30 Minuten bis einige Stunden, danach rechnet Stockfish 15 bis 60 Minuten. Mit `--quick` siehst du das Ergebnis in wenigen Minuten, sobald die Partien da sind.
+- **Dauer:** Der Download ist der langsame Teil, denn Lichess drosselt jede einzelne Verbindung. Bei einer Messung waren es mit einer Verbindung 0,6 MB/s (etwa 7 Stunden pro Monat), mit `--archive` und 4 Verbindungen 6 MB/s (etwa 1,5 bis 2 Stunden). Dein Wert kann abweichen. Danach rechnet Stockfish 15 bis 60 Minuten. Mit `--quick` siehst du das Ergebnis in wenigen Minuten, sobald die Partien da sind.
+- **Schneller laden:** Nur mit `--archive` lädt das Tool über mehrere Verbindungen gleichzeitig (Standard 4). Ohne `--archive` wird die Monatsdatei über eine Verbindung gestreamt und ist deutlich langsamer. `REPERTOIRE_VERBINDUNGEN=6 bash repertoire.sh ...` ändert die Zahl, `1` schaltet auf eine Verbindung zurück. Ein abgebrochener Download (Strg+C) setzt beim nächsten Start dort fort, wo er war.
 - **Nochmal starten:** Mit denselben Angaben nutzt das Skript die schon geladenen Partien und rechnet nur, was fehlt. Ein Monat, der schon in der Bank ist, wird nie neu gebaut.
 - **Beim Warten:** Bei jedem Schritt hüpft ein Springer über ein kleines Brett, dazu Prozent und Restzeit.
 - **Linux:** Statt Homebrew `sudo apt install python3-venv zstd pv mawk stockfish`, der Rest ist gleich.
