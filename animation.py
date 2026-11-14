@@ -96,7 +96,7 @@ def main():
     verlauf = []                                                  # (Zeit, Bytes) für die Geschwindigkeit
     while not stopp:
         if "--groesse" in opt:
-            try: n = os.path.getsize(opt["--groesse"])
+            try: n = os.stat(opt["--groesse"]).st_blocks * 512      # belegte Bytes, Lücken zählen nicht
             except OSError: n = start
             jetzt = time.time(); verlauf.append((jetzt, n)); verlauf = [v for v in verlauf if jetzt - v[0] <= 10]
             mbs = (verlauf[-1][1] - verlauf[0][1]) / max(verlauf[-1][0] - verlauf[0][0], 1e-6) / 1e6
