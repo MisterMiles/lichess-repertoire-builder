@@ -69,7 +69,7 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 | `--name NAME` | Name des Repertoires | aus Farbe und Zügen |
 | `--out ORDNER` | Ergebnisordner, Arbeitsdateien kommen nach `ORDNER/arbeit/NAME` (`--ausgabe`) | `repertoires` neben dem Tool Ordner |
 | `--repertoire PGN` | eigenes Repertoire, dessen Züge markiert werden | keins |
-| `--plain` | keine Springer Animation, schlichte Ausgabe (automatisch, wenn die Ausgabe in eine Datei geht) | aus |
+| `--plain` | keine Fortschrittsanzeige, schlichte Ausgabe (automatisch, wenn die Ausgabe in eine Datei geht) | aus |
 | `--quick` (`--schnell`) | schneller Probelauf mit geringer Stockfish Tiefe | aus |
 | `--notation de` | Kapitelnamen und Kommentare mit deutschen Figuren (S, L, T, D) | englisch (N, B, R, Q) |
 

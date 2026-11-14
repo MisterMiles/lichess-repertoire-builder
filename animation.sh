@@ -1,4 +1,4 @@
-# Hilfsfunktionen für die Springer Animation in den Bash Skripten (wird mit source geladen).
+# Hilfsfunktionen für die Fortschrittsanzeige in den Bash Skripten (wird mit source geladen).
 # Ohne Terminal, ohne python3 oder pv, oder mit REPERTOIRE_PLAIN=1 bleibt die Ausgabe schlicht.
 
 ANIM_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/animation.py"

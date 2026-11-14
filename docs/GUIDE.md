@@ -71,7 +71,7 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 | `--name NAME` | name of the repertoire | from colour and moves |
 | `--out FOLDER` | results folder, working files go to `FOLDER/arbeit/NAME` (`--ausgabe`) | `repertoires` next to the tool folder |
 | `--repertoire PGN` | your own repertoire, its moves get marked | none |
-| `--plain` | no knight animation, plain output (automatic when the output goes to a file) | off |
+| `--plain` | no progress animation, plain output (automatic when the output goes to a file) | off |
 | `--quick` (`--schnell`) | quick trial run with low Stockfish depth | off |
 | `--notation de` | German piece letters (S, L, T, D) in chapter names and comments | English (N, B, R, Q) |
 

@@ -1,18 +1,17 @@
-"""Springer Animation für Wartezeiten.
+"""Fortschrittsanzeige für Wartezeiten.
 
-Ein Springer hüpft über einen Balken, hinter ihm füllen sich die
-Felder. Dazu Prozent und geschätzte Restzeit. Ohne Terminal (Ausgabe in eine
-Datei umgeleitet) oder mit REPERTOIRE_PLAIN=1 bleibt alles schlicht.
+Ein ruhiger Balken mit Prozent und geschätzter Restzeit, einmal pro Sekunde und nur bei
+Änderung neu gezeichnet. Ohne Terminal (Ausgabe in eine Datei umgeleitet) oder mit
+REPERTOIRE_PLAIN=1 bleibt alles schlicht.
 
-Als Modul:   s = Springer("Stockfish"); s.zeichne(0.42, "noch ca. 3 Min."); s.fertig("fertig in 5 Min.")
+Als Modul:   s = Balken("Stockfish"); s.zeichne(0.42, "noch ca. 3 Min."); s.fertig("fertig in 5 Min.")
 Für Bash:    python3 animation.py "Download 2026-07" --groesse DATEI --gesamt BYTES [--start BYTES]
              python3 animation.py "Filtern 2026-07" --pv DATEI      (Ausgabe von pv -n)
              Läuft, bis es ein SIGTERM bekommt, und schreibt dann die Abschlusszeile.
 """
 import os, shutil, signal, sys, time
 
-FIGUREN = ("♞", "♘")
-LEER, SPUR = "·", "▪"
+BREITE = 20
 
 
 def an():
@@ -30,30 +29,27 @@ def zahl(x, st=1):
     return f"{x:.{st}f}".replace(".", ",")
 
 
-class Springer:
+class Balken:
     def __init__(self, name):
-        self.name, self.t0, self.tick, self.gezeichnet = name, time.time(), 0, False
-        self.breite = shutil.get_terminal_size((80, 24)).columns
-        self.spruenge = 12 if self.breite >= 100 else (8 if self.breite >= 70 else 4)   # Sprünge über das ganze Brett
+        self.name, self.t0, self.letzte = name, time.time(), ""
 
-    def _balken(self, anteil):
-        k = min(int(anteil * self.spruenge + 1e-9), self.spruenge)
-        spalten = 2 * self.spruenge + 1
-        sp = 2 * k                                           # der Springer rückt pro Sprung zwei Felder vor
-        figur = FIGUREN[self.tick % 2] if anteil < 1 else FIGUREN[0]
-        return SPUR * sp + figur + LEER * (spalten - sp - 1)
+    @staticmethod
+    def _balken(anteil):
+        k = min(int(anteil * BREITE + 1e-9), BREITE)
+        return "█" * k + "░" * (BREITE - k)
 
     def zeichne(self, anteil, info="", info_oben=""):
-        anteil = max(0.0, min(anteil, 1.0)); self.tick += 1
+        anteil = max(0.0, min(anteil, 1.0))
         breite = shutil.get_terminal_size((80, 24)).columns      # bei jedem Bild neu, falls das Fenster sich ändert
-        zeile = f"  {self.name:<16} {self._balken(anteil)}  {zahl(anteil * 100):>5} %  {info_oben}  {info}".rstrip()
-        sys.stderr.write("\r\x1b[2K" + zeile[:breite - 1]); sys.stderr.flush(); self.gezeichnet = True
+        zeile = f"  {self.name:<16} {self._balken(anteil)}  {zahl(anteil * 100):>5} %  {info_oben}  {info}".rstrip()[:breite - 1]
+        if zeile == self.letzte: return                          # nur zeichnen, wenn sich etwas geändert hat
+        sys.stderr.write("\r\x1b[2K" + zeile); sys.stderr.flush(); self.letzte = zeile
 
     def fertig(self, text=None):
         text = text or f"fertig in {dauer(time.time() - self.t0)}"
         breite = shutil.get_terminal_size((80, 24)).columns
         sys.stderr.write("\r\x1b[2K" + f"  {self.name:<16} {self._balken(1.0)}  {text}"[:breite - 1] + "\n"); sys.stderr.flush()
-        self.gezeichnet = False
+        self.letzte = ""
 
 
 class Restzeit:
@@ -82,7 +78,7 @@ def main():
     args = sys.argv[1:]
     if not args: print(__doc__); return
     name = args[0]; opt = dict(zip(args[1::2], args[2::2]))
-    s = Springer(name); rz = Restzeit(); stopp = []
+    s = Balken(name); rz = Restzeit(); stopp = []
     signal.signal(signal.SIGTERM, lambda *_: stopp.append(1))
     signal.signal(signal.SIGINT, lambda *_: stopp.append(1))
     gesamt = float(opt.get("--gesamt", 0) or 0); start = float(opt.get("--start", 0) or 0)
@@ -99,7 +95,7 @@ def main():
         else:
             a = _lies_pv(opt.get("--pv", "")); info = rz.text(a); oben = ""
         s.zeichne(a, info, oben)
-        for _ in range(5):
+        for _ in range(10):
             if stopp: break
             time.sleep(0.1)
     s.fertig()
