@@ -41,6 +41,12 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 bash repertoire.sh white "1. e4" --months 3
 ```
 
+**We recommend `--archive` for the first full run.** The first download is huge (about 29 GB per month) and takes hours, so it is likely that something stops it on the way. With `--archive` the download is split over several connections and continues where it stopped when you start the same command again. Without it, a month that was interrupted starts again from zero. Add `--bank` as well, so the next repertoire does not need the download at all:
+
+```bash
+bash repertoire.sh white "1. e4" --months 3 --bank ~/gamebank --archive ~/lichess --delete-archive
+```
+
 ## What you get
 
 The results land in the folder `repertoires` next to the tool folder (change it with `--out`).

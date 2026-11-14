@@ -41,6 +41,12 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 bash repertoire.sh white "1. e4" --months 3
 ```
 
+**Für den ersten vollen Lauf empfehlen wir `--archive`.** Der erste Download ist riesig (etwa 29 GB pro Monat) und dauert Stunden, da kann leicht etwas dazwischenkommen. Mit `--archive` läuft der Download über mehrere Verbindungen und setzt nach einem Abbruch dort fort, wo er stand, wenn du denselben Befehl noch einmal startest. Ohne `--archive` beginnt ein unterbrochener Monat wieder bei null. Nimm zusätzlich `--bank`, dann braucht das nächste Repertoire den Download gar nicht mehr:
+
+```bash
+bash repertoire.sh white "1. e4" --months 3 --bank ~/gamebank --archive ~/lichess --delete-archive
+```
+
 ## Was du bekommst
 
 Die Ergebnisse landen im Ordner `repertoires` neben dem Tool Ordner (änderbar mit `--out`).
