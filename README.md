@@ -31,8 +31,6 @@ Without git: click "Code" and then "Download ZIP" on GitHub, unzip it and `cd` i
 bash repertoire.sh white "1. e4"
 ```
 
-Colour is `white` or `black`, moves use English notation. For Black, include your own reply in the starting moves.
-
 ```bash
 # Black against 1.d4 with 1...d5, opponents rated 1600 to 2000, quick trial run first
 bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick

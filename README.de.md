@@ -31,8 +31,6 @@ Ohne git: oben auf GitHub „Code“ und dann „Download ZIP“ wählen, entpac
 bash repertoire.sh white "1. e4"
 ```
 
-Die Farbe ist `white` oder `black`, Züge schreibst du in englischer Notation. Für Schwarz gehört deine eigene Antwort mit in die Startzüge.
-
 ```bash
 # Schwarz gegen 1.d4 mit 1...d5, Gegner mit Elo 1600 bis 2000, erst ein schneller Probelauf
 bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
