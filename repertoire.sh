@@ -4,6 +4,7 @@
 #   bash repertoire.sh white "1. e4"
 #   bash repertoire.sh black "1. d4 d5" --elo 1600-2000
 #   bash repertoire.sh white "1. e4" --months 3
+#   bash repertoire.sh white @zuege.txt           (long start moves in a text file, move numbers optional)
 #
 # Options (German names in brackets work as well):
 #   --elo FROM-TO        rating range of both players             (default 1800-2499)
@@ -37,10 +38,14 @@
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$DIR/animation.sh"
-hilfe() { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; }
+hilfe() { sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; }
 
 [ $# -lt 2 ] && { hilfe; exit 1; }
-FARBE="$1"; START=$(printf '%s' "$2" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g'); shift 2
+START_ARG="$2"
+case "$START_ARG" in   # @datei.txt: die Startzüge stehen in einer Textdatei (Zugnummern sind optional)
+  @*) F="${START_ARG#@}"; [ -f "$F" ] || { echo "Datei mit Startzügen nicht gefunden: $F"; exit 1; }; START_ARG=$(tr '\n' ' ' < "$F");;
+esac
+FARBE="$1"; START=$(printf '%s' "$START_ARG" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g'); shift 2
 ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; BANK=""; DATEI=""; NAME=""; ERG=""; REP=""; SCHNELL=""; NOTATION="en"; LOESCHEN=""; DATEN=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -74,6 +79,12 @@ case "$FARBE" in
   schwarz|black|b|s) FARBE=schwarz;;
   *) echo "Colour must be white or black (weiss or schwarz)"; exit 1;;
 esac
+if [ -n "$MONAT" ] && ! [[ "$MONAT" =~ ^[0-9]{4}-[0-9]{2}(\.\.[0-9]{4}-[0-9]{2})?$ ]]; then
+  echo "--month erwartet JJJJ-MM (z. B. 2026-08) oder JJJJ-MM..JJJJ-MM."
+  [[ "$MONAT" =~ ^[0-9]+$ ]] && echo "Meintest du --months $MONAT (die letzten $MONAT Monate)?"
+  exit 1
+fi
+if [ -n "$ANZAHL" ] && ! [[ "$ANZAHL" =~ ^[0-9]+$ ]]; then echo "--months erwartet eine Zahl, z. B. --months 3."; exit 1; fi
 ELO_MIN="${ELO%%-*}"; ELO_MAX="${ELO##*-}"
 if [ -z "$NAME" ]; then
   ZUEGE="$(printf '%s' "$START" | tr -cd 'A-Za-z0-9 ' | tr -s ' ' '_')"

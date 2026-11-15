@@ -82,6 +82,7 @@ The full list is in the [full guide](docs/GUIDE.md). Settings for a single reper
 - Download: each Lichess month is about 29 GB and is downloaded once, with 4 connections, resumable. After an interruption, rerun the same command. Measured: 6 MB/s, about 1.5 to 2 hours per month. Yours may differ. `REPERTOIRE_VERBINDUNGEN=6` changes the number of connections.
 - Game bank: every month becomes one compact table in `~/lichess-data/bank`, about 5 GB. It keeps the first 40 half moves of each game, without bullet and bot games. After that a search for your starting moves takes under a minute per month, for any opening, colour and rating range. For bullet, build a second bank: `bash gamebank.sh 2026-09 --data NEWFOLDER --keep-raw --with-bullet`.
 - Stockfish needs 15 to 60 minutes. `--quick` shows a result within minutes. Wrong starting moves are caught before anything is downloaded.
+- Long start moves: write them into a text file and use `bash repertoire.sh white @moves.txt`. Move numbers are optional, so `e4 c5 Nf3 e6` works as well.
 - Running again with the same arguments computes only what is missing. A month already in the bank is never built again.
 - The numbers are statistics of online games. Lines with few games are noisy, evaluations use a fixed depth, and the model game is an example, not a proof.
 - Linux: instead of Homebrew use `sudo apt install python3-venv zstd pv mawk stockfish`, the rest is the same.
