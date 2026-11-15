@@ -4,9 +4,14 @@
 #   bash repertoire.sh white "1. e4"
 #   bash repertoire.sh black "1. d4 d5" --elo 1600-2000
 #   bash repertoire.sh white "1. e4" --months 3
-#   bash repertoire.sh white @zuege.txt           (long start moves in a text file, move numbers optional)
+#   bash repertoire.sh white --start-file zuege.txt
+#   bash repertoire.sh white https://lichess.org/study/ID/ID --start-moves 8
 #
 # Options (German names in brackets work as well):
+#   --start-file FILE    start moves from a text or PGN file instead of the quotes (--start-datei).
+#                        Tags, comments and variations are ignored. A lichess.org game or study
+#                        chapter link works in place of the moves as well.
+#   --start-moves N      use only the first N full moves of the file or link (--start-zuege)
 #   --elo FROM-TO        rating range of both players             (default 1800-2499)
 #   --month YYYY-MM      Lichess month (--monat)                  (default: last full month)
 #                        several months: --month 2026-07..2026-09
@@ -38,17 +43,17 @@
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$DIR/animation.sh"
-hilfe() { sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; }
+hilfe() { sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'; }
 
 [ $# -lt 2 ] && { hilfe; exit 1; }
-START_ARG="$2"
-case "$START_ARG" in   # @datei.txt: die Startzüge stehen in einer Textdatei (Zugnummern sind optional)
-  @*) F="${START_ARG#@}"; [ -f "$F" ] || { echo "Datei mit Startzügen nicht gefunden: $F"; exit 1; }; START_ARG=$(tr '\n' ' ' < "$F");;
-esac
-FARBE="$1"; START=$(printf '%s' "$START_ARG" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g'); shift 2
+FARBE="$1"; shift
+START_ARG=""; case "$1" in -*) ;; *) START_ARG="$1"; shift;; esac   # Züge oder Lichess Link, oder --start-file
+STARTDATEI=""; STARTN=""
 ELO="1800-2499"; MONAT=""; ANZAHL=""; ARCHIV=""; BANK=""; DATEI=""; NAME=""; ERG=""; REP=""; SCHNELL=""; NOTATION="en"; LOESCHEN=""; DATEN=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    --start-file|--start-datei) STARTDATEI="$2"; shift 2;;
+    --start-moves|--start-zuege) STARTN="$2"; shift 2;;
     --elo) ELO="$2"; shift 2;;
     --month|--monat) MONAT="$2"; shift 2;;
     --months|--monate) ANZAHL="$2"; shift 2;;
@@ -69,6 +74,11 @@ while [ $# -gt 0 ]; do
     *) echo "Unknown option: $1 (bash repertoire.sh --help shows all options)"; exit 1;;
   esac
 done
+# Startzüge: aus Zügen, einer Datei oder einem Lichess Link (Zugnummern, Tags und Kommentare werden ignoriert)
+QUELLE="$STARTDATEI"; case "$START_ARG" in http*) QUELLE="$START_ARG"; START_ARG="";; esac
+if [ -n "$QUELLE" ]; then START_ARG=$(python3 -I "$DIR/startzuege.py" "$QUELLE" "$STARTN") || exit 1; fi
+[ -z "$START_ARG" ] && { echo "Bitte Startzüge angeben: in Anführungszeichen, mit --start-file DATEI oder als Lichess Link."; exit 1; }
+START=$(printf '%s' "$START_ARG" | sed -E 's/([0-9]+)\.([^ .])/\1. \2/g')
 # One data folder: bank and downloads. The old --bank/--archive still win when given.
 DATEN="${DATEN:-$HOME/lichess-data}"
 [ -z "$BANK" ] && BANK="$DATEN/bank"

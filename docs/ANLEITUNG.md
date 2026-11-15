@@ -66,6 +66,8 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 | `--data ORDNER` | Wo Partienbank (`bank/`, etwa 5 GB pro Monat, ohne Bullet und Bots) und fortsetzbare Downloads (`download/`) liegen. Weitere Analysen suchen nur noch in der Bank, wenige Sekunden pro Monat | `~/lichess-data` |
 | `--keep-raw` | Die 29 GB Monatsdatei nach dem Bau der Banktabelle behalten | aus (wird nach geprüfter Tabelle gelöscht) |
 | `--file DATEI` (`--datei`) | eigene Lichess Datei (`.pgn` oder `.pgn.zst`) statt Download | aus |
+| `--start-file DATEI` (`--start-datei`) | Startzüge aus einer Text oder PGN Datei (Tags, Kommentare und Varianten werden ignoriert). Statt der Züge geht auch ein Link zu einer Lichess Partie oder einem Studienkapitel | aus |
+| `--start-moves N` (`--start-zuege`) | nur die ersten N vollen Züge der Datei oder des Links nehmen | alle |
 | `--name NAME` | Name des Repertoires | aus Farbe und Zügen |
 | `--out ORDNER` | Ergebnisordner, Arbeitsdateien kommen nach `ORDNER/arbeit/NAME` (`--ausgabe`) | `repertoires` neben dem Tool Ordner |
 | `--repertoire PGN` | eigenes Repertoire, dessen Züge markiert werden | keins |

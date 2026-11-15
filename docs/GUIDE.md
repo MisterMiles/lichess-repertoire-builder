@@ -68,6 +68,8 @@ bash repertoire.sh black "1. d4 d5" --elo 1600-2000 --quick
 | `--data FOLDER` | where the game bank (`bank/`, about 5 GB per month, no bullet, no bots) and the resumable downloads (`download/`) live. Further analyses only search the bank, a few seconds per month | `~/lichess-data` |
 | `--keep-raw` | keep the 29 GB monthly file after its bank table is built | off (deleted once the table is verified) |
 | `--file FILE` (`--datei`) | your own Lichess file (`.pgn` or `.pgn.zst`) instead of the download | off |
+| `--start-file FILE` (`--start-datei`) | start moves from a text or PGN file (tags, comments, variations ignored). A lichess.org game or study chapter link in place of the moves works too | off |
+| `--start-moves N` (`--start-zuege`) | use only the first N full moves of the file or link | all |
 | `--name NAME` | name of the repertoire | from colour and moves |
 | `--out FOLDER` | results folder, working files go to `FOLDER/arbeit/NAME` (`--ausgabe`) | `repertoires` next to the tool folder |
 | `--repertoire PGN` | your own repertoire, its moves get marked | none |
